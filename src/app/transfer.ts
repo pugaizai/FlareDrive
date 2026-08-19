@@ -171,62 +171,82 @@ export async function multipartUpload(
     method: "POST",
   });
   const { uploadId } = await uploadResponse.json<{ uploadId: string }>();
-  const totalChunks = Math.ceil(file.size / SIZE_LIMIT);
 
-  const limit = pLimit(2);
-  const parts = Array.from({ length: totalChunks }, (_, i) => i + 1);
-  const partsLoaded = Array.from({ length: totalChunks + 1 }, () => 0);
-  const promises = parts.map((i) =>
-    limit(async () => {
-      const chunk = file.slice((i - 1) * SIZE_LIMIT, i * SIZE_LIMIT);
-      const searchParams = new URLSearchParams({
-        partNumber: i.toString(),
-        uploadId,
-      });
-      const uploadUrl = `/webdav/${encodeKey(key)}?${searchParams}`;
-      if (i === limit.concurrency)
-        await new Promise((resolve) => setTimeout(resolve, 1000));
+  // 失败时中止未完成的 multipart 上传，避免 R2 残留孤儿分块
+  const abortUpload = async () => {
+    const abortParams = new URLSearchParams({ uploadId });
+    await webdavFetch(`/webdav/${encodeKey(key)}?${abortParams}`, {
+      method: "DELETE",
+    }).catch(() => {});
+  };
 
-      const uploadPart = () =>
-        xhrFetch(uploadUrl, {
-          method: "PUT",
-          headers,
-          body: chunk,
-          onUploadProgress: (progressEvent) => {
-            partsLoaded[i] = progressEvent.loaded;
-            options?.onUploadProgress?.({
-              loaded: partsLoaded.reduce((a, b) => a + b),
-              total: file.size,
-            });
-          },
+  try {
+    const totalChunks = Math.ceil(file.size / SIZE_LIMIT);
+
+    const limit = pLimit(2);
+    const parts = Array.from({ length: totalChunks }, (_, i) => i + 1);
+    const partsLoaded = Array.from({ length: totalChunks + 1 }, () => 0);
+    const promises = parts.map((i) =>
+      limit(async () => {
+        const chunk = file.slice((i - 1) * SIZE_LIMIT, i * SIZE_LIMIT);
+        const searchParams = new URLSearchParams({
+          partNumber: i.toString(),
+          uploadId,
         });
+        const uploadUrl = `/webdav/${encodeKey(key)}?${searchParams}`;
+        if (i === limit.concurrency)
+          await new Promise((resolve) => setTimeout(resolve, 1000));
 
-      const retryReducer = (acc: Promise<Response>) =>
-        acc
-          .then((res) => {
-            const retryAfter = res.headers.get("retry-after");
-            if (!retryAfter) return res;
-            return uploadPart();
-          })
-          .catch(uploadPart);
-      const response = await [1, 2].reduce(retryReducer, uploadPart());
-      return { partNumber: i, etag: response.headers.get("etag")! };
-    })
-  );
-  const uploadedParts = await Promise.all(promises);
-  const completeParams = new URLSearchParams({ uploadId });
-  const response = await webdavFetch(
-    `/webdav/${encodeKey(key)}?${completeParams}`,
-    {
-      method: "POST",
-      body: JSON.stringify({ parts: uploadedParts }),
-    }
-  );
-  if (!response.ok) throw new Error(await response.text());
-  return response;
+        const uploadPart = () =>
+          xhrFetch(uploadUrl, {
+            method: "PUT",
+            headers,
+            body: chunk,
+            onUploadProgress: (progressEvent) => {
+              partsLoaded[i] = progressEvent.loaded;
+              options?.onUploadProgress?.({
+                loaded: partsLoaded.reduce((a, b) => a + b),
+                total: file.size,
+              });
+            },
+          });
+
+        const retryReducer = (acc: Promise<Response>) =>
+          acc
+            .then((res) => {
+              const retryAfter = res.headers.get("retry-after");
+              if (!retryAfter) return res;
+              return uploadPart();
+            })
+            .catch(uploadPart);
+        const response = await [1, 2].reduce(retryReducer, uploadPart());
+        return { partNumber: i, etag: response.headers.get("etag")! };
+      })
+    );
+    const uploadedParts = await Promise.all(promises);
+    const completeParams = new URLSearchParams({ uploadId });
+    const response = await webdavFetch(
+      `/webdav/${encodeKey(key)}?${completeParams}`,
+      {
+        method: "POST",
+        body: JSON.stringify({ parts: uploadedParts }),
+      }
+    );
+    if (!response.ok) throw new Error(await response.text());
+    return response;
+  } catch (error) {
+    // 任一分块或 complete 失败：清理已创建但未完成的 multipart 上传
+    await abortUpload();
+    throw error;
+  }
 }
 
-export async function copyPaste(source: string, target: string, move = false) {
+export async function copyPaste(
+  source: string,
+  target: string,
+  move = false,
+  dontOverwrite = false
+) {
   const uploadUrl = `${WEBDAV_ENDPOINT}${encodeKey(source)}`;
   const destinationUrl = new URL(
     `${WEBDAV_ENDPOINT}${encodeKey(target)}`,
@@ -234,12 +254,18 @@ export async function copyPaste(source: string, target: string, move = false) {
   );
   const response = await webdavFetch(uploadUrl, {
     method: move ? "MOVE" : "COPY",
-    headers: { Destination: destinationUrl.href },
+    headers: {
+      Destination: destinationUrl.href,
+      ...(dontOverwrite ? { Overwrite: "F" } : {}),
+    },
   });
-  if (!response.ok)
-    throw new Error(
+  if (!response.ok) {
+    const error = new Error(
       `${move ? "Move" : "Copy"} failed with status ${response.status}`
-    );
+    ) as Error & { status?: number };
+    error.status = response.status;
+    throw error;
+  }
 }
 
 export async function createFolder(cwd: string) {

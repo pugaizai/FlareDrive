@@ -29,8 +29,14 @@ const TextPadDrawer: React.FC<TextPadDrawerProps> = ({
   const uploadEnqueue = useUploadEnqueue();
 
   const handleSaveNote = () => {
+    const trimmedName = noteName.trim();
+    // 与 createFolder 一致：不允许空文件名或包含路径分隔符
+    if (!trimmedName || trimmedName.includes("/")) {
+      window.alert("Invalid file name");
+      return;
+    }
     const fileBlob = new Blob([noteText], { type: "text/plain" });
-    const file = new File([fileBlob], noteName, { type: "text/plain" });
+    const file = new File([fileBlob], trimmedName, { type: "text/plain" });
     uploadEnqueue({ file, basedir: cwd });
     onUpload(); // Refresh file list after upload
     setOpen(false); // Close drawer

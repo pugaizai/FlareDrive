@@ -259,7 +259,21 @@ function Main({
           if (multiSelected?.length !== 1) return;
           const newName = window.prompt("Rename to:");
           if (!newName) return;
-          await copyPaste(multiSelected[0], cwd + newName, true);
+          if (newName.includes("/")) {
+            window.alert("Invalid file name");
+            return;
+          }
+          try {
+            // Overwrite: F —— 目标已存在时服务端返回 412，绝不静默覆盖
+            await copyPaste(multiSelected[0], cwd + newName, true, true);
+          } catch (error) {
+            if ((error as { status?: number })?.status === 412) {
+              window.alert(`"${newName}" already exists`);
+            } else {
+              onError(error as Error);
+            }
+            return;
+          }
           fetchFiles();
         }}
         onDelete={async () => {
