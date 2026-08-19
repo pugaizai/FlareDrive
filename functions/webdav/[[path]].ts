@@ -23,6 +23,14 @@ async function handleMethodNotAllowed() {
   return new Response(null, { status: 405 });
 }
 
+// UTF-8 安全的 Base64（Workers 的 btoa 只支持 Latin-1）
+function toBase64(value: string) {
+  const bytes = new TextEncoder().encode(value);
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary);
+}
+
 const HANDLERS: Record<
   string,
   (context: RequestHandlerParams) => Promise<Response>
@@ -62,7 +70,9 @@ export const onRequest: PagesFunction<{
         headers: { "WWW-Authenticate": `Basic realm="WebDAV"` },
       });
     }
-    const expectedAuth = `Basic ${btoa(
+    // UTF-8 安全的 Base64：与前端 createAuthHeaders 保持一致，
+    // 否则用户名/密码含非 ASCII 字符时 btoa 会直接抛异常
+    const expectedAuth = `Basic ${toBase64(
       `${env.WEBDAV_USERNAME}:${env.WEBDAV_PASSWORD}`
     )}`;
     if (auth !== expectedAuth)

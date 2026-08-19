@@ -19,7 +19,8 @@ type DavProperties = {
 
 function fromR2Object(object: R2Object | typeof ROOT_OBJECT): DavProperties {
   return {
-    creationdate: object.uploaded.toUTCString(),
+    // RFC 4918 要求 creationdate 为 ISO 8601 格式（如 2024-06-20T12:34:56.789Z）
+    creationdate: object.uploaded.toISOString(),
     displayname: object.httpMetadata?.contentDisposition,
     getcontentlanguage: object.httpMetadata?.contentLanguage,
     getcontentlength: object.size.toString(),
@@ -32,6 +33,21 @@ function fromR2Object(object: R2Object | typeof ROOT_OBJECT): DavProperties {
         : "",
     "fd:thumbnail": object.customMetadata?.thumbnail,
   };
+}
+
+// XML 特殊字符转义，防止文件名/元数据破坏响应 XML
+function escapeXml(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
+// 与前端 encodeKey 保持一致：按路径段 encodeURIComponent
+function encodeKey(key: string) {
+  return key.split("/").map(encodeURIComponent).join("/");
 }
 
 async function findChildren({
@@ -84,12 +100,18 @@ export async function handleRequestPropfind({
     const properties = fromR2Object(child);
     return `
   <response>
-    <href>${encodeURI(`${WEBDAV_ENDPOINT}${child.key}`)}</href>
+    <href>${escapeXml(`${WEBDAV_ENDPOINT}${encodeKey(child.key)}`)}</href>
     <propstat>
       <prop>
         ${Object.entries(properties)
           .filter(([_, value]) => value !== undefined)
-          .map(([key, value]) => `<${key}>${value}</${key}>`)
+          .map(([key, value]) => {
+            if (value === undefined) return "";
+            return `<${key}>${
+              // resourcetype 本身就是 XML 标记，不能整体转义
+              key === "resourcetype" ? value : escapeXml(value)
+            }</${key}>`;
+          })
           .join("\n")}
       </prop>
       <status>HTTP/1.1 200 OK</status>

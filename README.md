@@ -40,13 +40,27 @@ npm run build
 npx wrangler pages deploy build
 ```
 
+### Wrangler configuration
+
+The repo ships a `wrangler.toml` so the environment is reproducible locally and via CLI:
+
+- Fill in your R2 bucket name in `wrangler.toml` (`bucket_name` under `[[r2_buckets]]`).
+- For local development, copy `.dev.vars.example` to `.dev.vars` and fill in credentials, then run:
+
+```bash
+npm run build
+npx wrangler pages dev build
+```
+
+- Do not commit real credentials: use the Pages dashboard or `npx wrangler pages secret put` in production.
+
 ### WebDAV endpoint
 
 You can use any client (such as [Cx File Explorer](https://play.google.com/store/apps/details?id=com.cxinventor.file.explorer), [BD File Manager](https://play.google.com/store/apps/details?id=com.liuzho.file.explorer))
 that supports the WebDAV protocol to access your files.
 Fill the endpoint URL as `https://<your-domain.com>/webdav` and use the username and password you set.
 
-However, the standard WebDAV protocol does not support large file (≥128MB) uploads due to the limitation of Cloudflare Workers.
+However, the standard WebDAV protocol does not support large file (≥100MB) uploads due to the limitation of Cloudflare Workers.
 You must upload large files through the web interface which supports chunked uploads.
 
 ## Acknowledgments

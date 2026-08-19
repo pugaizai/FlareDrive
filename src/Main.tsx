@@ -14,6 +14,7 @@ import FileGrid, { encodeKey, FileItem, isDirectory } from "./FileGrid";
 import MultiSelectToolbar from "./MultiSelectToolbar";
 import UploadDrawer, { UploadFab } from "./UploadDrawer";
 import TextPadDrawer from "./TextPadDrawer";
+import { subscribeAuthChanged, webdavFetch } from "./app/auth";
 import { copyPaste, fetchPath } from "./app/transfer";
 import { useTransferQueue, useUploadEnqueue } from "./app/transferQueue";
 
@@ -143,6 +144,9 @@ function Main({
     fetchFiles();
   }, [fetchFiles]);
 
+  // 保存/清除凭据后自动刷新文件列表
+  useEffect(() => subscribeAuthChanged(() => fetchFiles()), [fetchFiles]);
+
   useEffect(() => {
     if (!transferQueue.length) return;
     const lastFile = transferQueue[transferQueue.length - 1];
@@ -238,12 +242,18 @@ function Main({
       <MultiSelectToolbar
         multiSelected={multiSelected}
         onClose={() => setMultiSelected(null)}
-        onDownload={() => {
+        onDownload={async () => {
           if (multiSelected?.length !== 1) return;
+          const key = multiSelected[0];
+          const res = await webdavFetch(`/webdav/${encodeKey(key)}`);
+          if (!res.ok) throw new Error("Download failed");
+          const blob = await res.blob();
+          const url = URL.createObjectURL(blob);
           const a = document.createElement("a");
-          a.href = `/webdav/${encodeKey(multiSelected[0])}`;
-          a.download = multiSelected[0].split("/").pop()!;
+          a.href = url;
+          a.download = key.split("/").pop()!;
           a.click();
+          URL.revokeObjectURL(url);
         }}
         onRename={async () => {
           if (multiSelected?.length !== 1) return;
@@ -260,7 +270,7 @@ function Main({
           const confirmMessage = "Delete the following file(s) permanently?";
           if (!window.confirm(`${confirmMessage}\n${filenames}`)) return;
           for (const key of multiSelected)
-            await fetch(`/webdav/${encodeKey(key)}`, { method: "DELETE" });
+            await webdavFetch(`/webdav/${encodeKey(key)}`, { method: "DELETE" });
           fetchFiles();
         }}
         onShare={() => {

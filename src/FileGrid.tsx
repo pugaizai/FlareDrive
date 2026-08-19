@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import {
   Box,
   Grid,
@@ -6,7 +6,9 @@ import {
   ListItemIcon,
   ListItemText,
 } from "@mui/material";
+import ImageIcon from "@mui/icons-material/Image";
 import MimeIcon from "./MimeIcon";
+import { webdavFetch } from "./app/auth";
 import { humanReadableSize } from "./app/utils";
 
 export interface FileItem {
@@ -27,6 +29,39 @@ export function encodeKey(key: string) {
 
 export function isDirectory(file: FileItem) {
   return file.httpMetadata?.contentType === "application/x-directory";
+}
+
+// <img> 标签无法携带 Authorization 头，缩略图通过带认证的 fetch 加载为 Blob
+function Thumbnail({ digest, alt }: { digest: string; alt: string }) {
+  const [src, setSrc] = useState<string | null>(null);
+
+  useEffect(() => {
+    let objectUrl: string | null = null;
+    let cancelled = false;
+    webdavFetch(
+      `/webdav/_$flaredrive$/thumbnails/${encodeURIComponent(digest)}.png`
+    )
+      .then((res) => (res.ok ? res.blob() : null))
+      .then((blob) => {
+        if (!blob || cancelled) return;
+        objectUrl = URL.createObjectURL(blob);
+        setSrc(objectUrl);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [digest]);
+
+  if (!src) return <ImageIcon fontSize="large" />;
+  return (
+    <img
+      src={src}
+      alt={alt}
+      style={{ width: 36, height: 36, objectFit: "cover" }}
+    />
+  );
 }
 
 function FileGrid({
@@ -70,10 +105,9 @@ function FileGrid({
           >
             <ListItemIcon>
               {file.customMetadata?.thumbnail ? (
-                <img
-                  src={`/webdav/_$flaredrive$/thumbnails/${file.customMetadata.thumbnail}.png`}
+                <Thumbnail
+                  digest={file.customMetadata.thumbnail}
                   alt={file.key}
-                  style={{ width: 36, height: 36, objectFit: "cover" }}
                 />
               ) : (
                 <MimeIcon contentType={file.httpMetadata.contentType} />

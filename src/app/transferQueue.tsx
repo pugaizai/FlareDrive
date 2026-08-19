@@ -16,7 +16,12 @@ export interface TransferTask {
   loaded: number;
   total: number;
   error?: any;
+  /** 已尝试的次数（含当前这次），用于失败自动重试 */
+  attempts?: number;
 }
+
+/** 单个任务失败后的最大尝试次数 */
+const MAX_ATTEMPTS = 3;
 
 const TransferQueueContext = createContext<TransferTask[]>([]);
 const SetTransferQueueContext = createContext<
@@ -54,17 +59,15 @@ export function TransferQueueProvider({
   const [transferTasks, setTransferTasks] = useState<TransferTask[]>([]);
   const taskProcessing = useRef<TransferTask | null>(null);
 
-  function currentTaskUpdater(props: Partial<TransferTask>) {
-    const currentTask = taskProcessing.current!;
-    return (tasks: TransferTask[]) => {
-      const newTask: TransferTask = { ...currentTask, ...props };
-      const newTasks = tasks.map((t) =>
-        t === taskProcessing.current ? newTask : t
-      );
-      if (currentTask === taskProcessing.current)
-        taskProcessing.current = newTask;
-      return newTasks;
-    };
+  function updateCurrentTask(props: Partial<TransferTask>) {
+    const currentTask = taskProcessing.current;
+    if (!currentTask) return;
+    // 同步更新 ref，并按对象引用在 state 中替换，保证后续更新能命中
+    const newTask: TransferTask = { ...currentTask, ...props };
+    taskProcessing.current = newTask;
+    setTransferTasks((tasks) =>
+      tasks.map((t) => (t === currentTask ? newTask : t))
+    );
   }
 
   useEffect(() => {
@@ -74,20 +77,33 @@ export function TransferQueueProvider({
     if (!taskToProcess || taskProcessing.current) return;
     taskProcessing.current = taskToProcess;
 
-    setTransferTasks(currentTaskUpdater({ status: "in-progress" }));
+    updateCurrentTask({ status: "in-progress" });
 
     processTransferTask({
       task: taskToProcess,
       onTaskProgress: ({ loaded }) => {
-        setTransferTasks(currentTaskUpdater({ loaded }));
+        updateCurrentTask({ loaded });
       },
     })
       .then(() => {
-        setTransferTasks(currentTaskUpdater({ status: "completed" }));
+        updateCurrentTask({ status: "completed" });
+        // 必须清空，否则后续任务永远不会被处理
         taskProcessing.current = null;
       })
       .catch((error) => {
-        setTransferTasks(currentTaskUpdater({ status: "failed", error }));
+        const attempts = (taskToProcess.attempts ?? 0) + 1;
+        if (attempts < MAX_ATTEMPTS) {
+          // 重试：恢复为 pending，让 effect 再次拾起该任务
+          updateCurrentTask({
+            status: "pending",
+            attempts,
+            loaded: 0,
+            error: undefined,
+          });
+        } else {
+          updateCurrentTask({ status: "failed", attempts, error });
+        }
+        taskProcessing.current = null;
       });
   }, [transferTasks]);
 
