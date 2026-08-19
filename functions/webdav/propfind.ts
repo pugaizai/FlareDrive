@@ -1,4 +1,5 @@
 import {
+  encodeKeyPath,
   listAll,
   RequestHandlerParams,
   ROOT_OBJECT,
@@ -43,11 +44,6 @@ function escapeXml(value: string) {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&apos;");
-}
-
-// 与前端 encodeKey 保持一致：按路径段 encodeURIComponent
-function encodeKey(key: string) {
-  return key.split("/").map(encodeURIComponent).join("/");
 }
 
 async function findChildren({
@@ -100,7 +96,7 @@ export async function handleRequestPropfind({
     const properties = fromR2Object(child);
     return `
   <response>
-    <href>${escapeXml(`${WEBDAV_ENDPOINT}${encodeKey(child.key)}`)}</href>
+    <href>${escapeXml(`${WEBDAV_ENDPOINT}${encodeKeyPath(child.key)}`)}</href>
     <propstat>
       <prop>
         ${Object.entries(properties)

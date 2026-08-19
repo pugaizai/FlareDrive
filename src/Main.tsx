@@ -15,6 +15,11 @@ import MultiSelectToolbar from "./MultiSelectToolbar";
 import UploadDrawer, { UploadFab } from "./UploadDrawer";
 import TextPadDrawer from "./TextPadDrawer";
 import { subscribeAuthChanged, webdavFetch } from "./app/auth";
+import {
+  collectEntries,
+  ensureDirectories,
+  relativeBasedir,
+} from "./app/folderUpload";
 import { copyPaste, fetchPath } from "./app/transfer";
 import { useTransferQueue, useUploadEnqueue } from "./app/transferQueue";
 
@@ -76,7 +81,7 @@ function DropZone({
   onDrop,
 }: {
   children: React.ReactNode;
-  onDrop: (files: FileList) => void;
+  onDrop: (event: React.DragEvent) => void;
 }) {
   const [dragging, setDragging] = useState(false);
 
@@ -100,7 +105,7 @@ function DropZone({
       onDragLeave={() => setDragging(false)}
       onDrop={(e) => {
         e.preventDefault();
-        onDrop(e.dataTransfer.files);
+        onDrop(e);
         setDragging(false);
       }}
     >
@@ -190,10 +195,27 @@ function Main({
         </Centered>
       ) : (
         <DropZone
-          onDrop={(files) => {
-            uploadEnqueue(
-              ...Array.from(files).map((file) => ({ file, basedir: cwd }))
-            );
+          onDrop={async (event) => {
+            const items = Array.from(event.dataTransfer.items);
+            const hasEntries = items.some((item) => item.webkitGetAsEntry);
+            if (hasEntries) {
+              // 拖入文件夹：遍历目录树，先建目录再入队
+              const { files, dirs } = await collectEntries(items);
+              await ensureDirectories(dirs, cwd);
+              uploadEnqueue(
+                ...files.map((file) => ({
+                  file,
+                  basedir: relativeBasedir(file, cwd),
+                }))
+              );
+            } else {
+              uploadEnqueue(
+                ...Array.from(event.dataTransfer.files).map((file) => ({
+                  file,
+                  basedir: cwd,
+                }))
+              );
+            }
           }}
         >
           <FileGrid
@@ -287,13 +309,24 @@ function Main({
             await webdavFetch(`/webdav/${encodeKey(key)}`, { method: "DELETE" });
           fetchFiles();
         }}
-        onShare={() => {
+        onShare={async () => {
           if (multiSelected?.length !== 1) return;
-          const url = new URL(
-            `/webdav/${encodeKey(multiSelected[0])}`,
-            window.location.href
-          );
-          navigator.share({ url: url.toString() });
+          try {
+            // 由服务端生成短时效签名分享链接（需配置 WEBDAV_SHARE_SECRET）
+            const res = await webdavFetch(
+              `/webdav/${encodeKey(multiSelected[0])}?share`
+            );
+            if (!res.ok)
+              throw new Error(`Share links are unavailable (${res.status})`);
+            const { url } = (await res.json()) as { url: string };
+            if (navigator.share) {
+              await navigator.share({ url }).catch(() => {});
+            } else {
+              window.prompt("Share link:", url);
+            }
+          } catch (error) {
+            onError(error as Error);
+          }
         }}
       />
     </>

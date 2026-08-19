@@ -194,8 +194,10 @@ export async function multipartUpload(
           uploadId,
         });
         const uploadUrl = `/webdav/${encodeKey(key)}?${searchParams}`;
-        if (i === limit.concurrency)
+        // workaround: 紧邻的并发分块上传偶发时序/限流问题，在第 2 块（并发上限处）稍作停顿
+        if (i === limit.concurrency) {
           await new Promise((resolve) => setTimeout(resolve, 1000));
+        }
 
         const uploadPart = () =>
           xhrFetch(uploadUrl, {

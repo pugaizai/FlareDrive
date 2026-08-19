@@ -1,4 +1,10 @@
-import { notFound, parseBucketPath } from "./utils";
+import {
+  createShareToken,
+  encodeKeyPath,
+  notFound,
+  parseBucketPath,
+  verifyShareToken,
+} from "./utils";
 import { handleRequestCopy } from "./copy";
 import { handleRequestDelete } from "./delete";
 import { handleRequestGet } from "./get";
@@ -50,14 +56,33 @@ export const onRequest: PagesFunction<{
   WEBDAV_USERNAME: string;
   WEBDAV_PASSWORD: string;
   WEBDAV_PUBLIC_READ?: string;
+  WEBDAV_SHARE_SECRET?: string;
+  WEBDAV_SHARE_TTL?: string;
 }> = async function (context) {
   const env = context.env;
   const request: Request = context.request;
   if (request.method === "OPTIONS") return handleRequestOptions();
 
+  const [bucket, path] = parseBucketPath(context);
+  if (!bucket) return notFound();
+
+  const searchParams = new URL(request.url).searchParams;
+  const shareSecret = env.WEBDAV_SHARE_SECRET;
+  const isShareRequest =
+    searchParams.has("share") && ["GET", "HEAD"].includes(request.method);
+
+  // 有效的分享 token（?token=<expires>.<hmac>）对 GET/HEAD 免认证
+  const token = searchParams.get("token");
+  const tokenValid =
+    !!token &&
+    !!shareSecret &&
+    ["GET", "HEAD"].includes(request.method) &&
+    (await verifyShareToken(shareSecret, path, token));
+
   const skipAuth =
-    env.WEBDAV_PUBLIC_READ === "1" &&
-    ["GET", "HEAD", "PROPFIND"].includes(request.method);
+    tokenValid ||
+    (env.WEBDAV_PUBLIC_READ === "1" &&
+      ["GET", "HEAD", "PROPFIND"].includes(request.method));
 
   if (!skipAuth) {
     if (!env.WEBDAV_USERNAME || !env.WEBDAV_PASSWORD)
@@ -79,8 +104,22 @@ export const onRequest: PagesFunction<{
       return new Response("Unauthorized", { status: 401 });
   }
 
-  const [bucket, path] = parseBucketPath(context);
-  if (!bucket) return notFound();
+  // 生成短时效签名分享链接（需要已认证）
+  if (isShareRequest) {
+    if (!shareSecret)
+      return new Response(
+        "Share links are not enabled: set WEBDAV_SHARE_SECRET",
+        { status: 503 }
+      );
+    const ttl = Number(env.WEBDAV_SHARE_TTL ?? 86400) || 86400; // 秒，默认 24h
+    const expires = Math.floor(Date.now() / 1000) + ttl;
+    const token = await createShareToken(shareSecret, path, expires);
+    const origin = new URL(request.url).origin;
+    const shareUrl = `${origin}/webdav/${encodeKeyPath(path)}?token=${token}`;
+    return new Response(JSON.stringify({ url: shareUrl }), {
+      headers: { "Content-Type": "application/json" },
+    });
+  }
 
   const method: string = (context.request as Request).method;
   const handler = HANDLERS[method] ?? handleMethodNotAllowed;

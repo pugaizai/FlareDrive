@@ -54,6 +54,13 @@ npx wrangler pages dev build
 
 - Do not commit real credentials: use the Pages dashboard or `npx wrangler pages secret put` in production.
 
+### Share links
+
+To enable share links from the web UI, set a `WEBDAV_SHARE_SECRET` environment variable
+(any long random string). Share links are HMAC-signed, expire after `WEBDAV_SHARE_TTL`
+seconds (default 86400 = 24h), and only grant read access to that single file —
+recipients do not need the WebDAV credentials.
+
 ### WebDAV endpoint
 
 You can use any client (such as [Cx File Explorer](https://play.google.com/store/apps/details?id=com.cxinventor.file.explorer), [BD File Manager](https://play.google.com/store/apps/details?id=com.liuzho.file.explorer))
