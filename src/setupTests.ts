@@ -70,3 +70,16 @@ if (typeof globalThis.Response === "undefined") {
   // @ts-ignore
   globalThis.Response = FakeResponse;
 }
+
+// jest 27 的 jsdom 环境通常不注入 crypto.subtle / TextEncoder（Node 全局），补齐。
+// 注意：require 在 jest 的模块作用域可用，但不在 globalThis 上。
+declare const require: (id: string) => any;
+
+if (typeof globalThis.TextEncoder === "undefined") {
+  const { TextEncoder, TextDecoder } = require("util");
+  globalThis.TextEncoder = TextEncoder;
+  globalThis.TextDecoder = TextDecoder;
+}
+if (typeof (globalThis as { crypto?: Crypto }).crypto?.subtle === "undefined") {
+  globalThis.crypto = require("crypto").webcrypto;
+}

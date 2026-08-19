@@ -1,5 +1,5 @@
 // Main.tsx
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Box,
   Breadcrumbs,
@@ -142,6 +142,40 @@ function Main({
       .catch(onError)
       .finally(() => setLoading(false));
   }, [cwd, onError]);
+
+  // ---- cwd ↔ location.hash 同步：刷新不丢路径，支持前进/后退 ----
+  const firstRender = useRef(true);
+
+  useEffect(() => {
+    const readHash = () => {
+      let raw = "";
+      try {
+        raw = decodeURIComponent(window.location.hash.slice(1));
+      } catch {
+        raw = "";
+      }
+      raw = raw.replace(/^\/?/, ""); // 兼容 "#/dir/" 与 "#dir/"
+      setCwd(raw ? raw.replace(/\/$/, "") + "/" : "");
+    };
+    readHash();
+    window.addEventListener("hashchange", readHash);
+    return () => window.removeEventListener("hashchange", readHash);
+  }, []);
+
+  useEffect(() => {
+    if (firstRender.current) {
+      // 首次渲染由 hash 决定 cwd，不反向写回
+      firstRender.current = false;
+      return;
+    }
+    let current = "";
+    try {
+      current = decodeURIComponent(window.location.hash.slice(1));
+    } catch {
+      current = "";
+    }
+    if (current !== cwd) window.location.hash = cwd;
+  }, [cwd]);
 
   useEffect(() => setLoading(true), [cwd]);
 

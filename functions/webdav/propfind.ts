@@ -82,7 +82,10 @@ export async function handleRequestPropfind({
   const isDirectory =
     rootObject === ROOT_OBJECT ||
     rootObject.httpMetadata?.contentType === "application/x-directory";
+  // RFC 4918：Depth 仅允许 0 / 1 / infinity
   const depth = request.headers.get("Depth") ?? "infinity";
+  if (!["0", "1", "infinity"].includes(depth))
+    return new Response("Bad Depth header", { status: 400 });
 
   const children = !isDirectory
     ? []

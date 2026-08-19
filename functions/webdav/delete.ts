@@ -1,3 +1,5 @@
+import pLimit from "p-limit";
+
 import { notFound } from "./utils";
 import { listAll, RequestHandlerParams } from "./utils";
 
@@ -22,10 +24,15 @@ export async function handleRequestDelete({
       return new Response(null, { status: 204 });
   }
 
+  // 子对象并发删除（R2 无批量删除 API），避免大目录串行过慢。
+  // 注意：单次函数调用的 CPU/请求预算有限，超大目录建议分批或走队列。
   const children = listAll(bucket, path === "" ? undefined : `${path}/`);
+  const limit = pLimit(10);
+  const promises: Promise<void>[] = [];
   for await (const child of children) {
-    await bucket.delete(child.key);
+    promises.push(limit(() => bucket.delete(child.key).then(() => undefined)));
   }
+  await Promise.all(promises);
 
   return new Response(null, { status: 204 });
 }

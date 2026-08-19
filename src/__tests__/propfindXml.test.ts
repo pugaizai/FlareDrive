@@ -60,3 +60,15 @@ it("preserves the collection resourcetype markup", async () => {
   const xml = await response.text();
   expect(xml).toContain("<resourcetype><collection /></resourcetype>");
 });
+
+it("rejects an invalid Depth header with 400", async () => {
+  const bucket = makeBucket([]);
+
+  const response = await handleRequestPropfind({
+    bucket,
+    path: "",
+    request: request("2"),
+  } as any);
+
+  expect(response.status).toBe(400);
+});
