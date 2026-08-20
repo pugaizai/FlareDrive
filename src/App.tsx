@@ -13,6 +13,7 @@ import Header from "./Header";
 import Main from "./Main";
 import ProgressDialog from "./ProgressDialog";
 import { saveCredentials, subscribeUnauthorized } from "./app/auth";
+import { SortOption } from "./app/sort";
 import { TransferQueueProvider } from "./app/transferQueue";
 
 const globalStyles = (
@@ -25,6 +26,7 @@ const theme = createTheme({
 
 function App() {
   const [search, setSearch] = useState("");
+  const [sort, setSort] = useState<SortOption>("name-asc");
   const [showProgressDialog, setShowProgressDialog] = React.useState(false);
   const [error, setError] = useState<Error | null>(null);
   const [showAuthDialog, setShowAuthDialog] = useState(false);
@@ -47,8 +49,10 @@ function App() {
             search={search}
             onSearchChange={(newSearch: string) => setSearch(newSearch)}
             setShowProgressDialog={setShowProgressDialog}
+            sort={sort}
+            onSortChange={setSort}
           />
-          <Main search={search} onError={setError} />
+          <Main search={search} onError={setError} sort={sort} />
         </Stack>
         <Snackbar
           autoHideDuration={5000}

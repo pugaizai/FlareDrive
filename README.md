@@ -41,17 +41,20 @@
 3. 在 Deployments 页面重试部署以生效
 4. （可选）添加自定义域名
 
-> ⚠️ Git 集成部署**不会读取** `wrangler.toml`，环境变量需在控制台配置。
+> ⚠️ Git 集成部署下，环境变量与 R2 绑定都需在 Pages 控制台配置（机密用"加密"类型）。
 
 ### 方式二：Wrangler CLI
 
 ```bash
 npm install
 npm run build
-npx wrangler pages deploy build
+npx wrangler pages deploy build \
+  --project-name flaredrive \
+  --compatibility-date=2026-08-19
 ```
 
-CLI 部署会读取 `wrangler.toml`（项目名、R2 绑定、`[vars]`）。
+项目不再内置 `wrangler.toml`：CLI 部署时项目名、兼容日期需用参数显式指定；
+R2 桶绑定与 `WEBDAV_*` 环境变量仍需在 Pages 控制台配置（或使用 `wrangler pages secret put`）。
 
 ## 环境变量
 
@@ -63,7 +66,7 @@ CLI 部署会读取 `wrangler.toml`（项目名、R2 绑定、`[vars]`）。
 | `WEBDAV_PUBLIC_READ` | 普通变量 | 可选 | 设为 `1` 开启公开读：`GET`/`HEAD`/`PROPFIND` 免认证（**注意：目录列表也会公开可枚举**） |
 | `WEBDAV_SHARE_TTL` | 普通变量 | 可选 | 分享链接有效期（秒），默认 `86400`（24 小时） |
 
-> 🔒 **机密项不要写入 `wrangler.toml` 的 `[vars]` 或提交到仓库！**
+> 🔒 **机密项不要提交到仓库或写进代码/CI 配置！**
 > 生产环境用 Pages 控制台"环境变量 → 加密"配置，或命令行：
 > ```bash
 > npx wrangler pages secret put WEBDAV_USERNAME
@@ -81,7 +84,7 @@ npx wrangler pages secret put WEBDAV_PASSWORD
 npx wrangler pages secret put WEBDAV_SHARE_SECRET   # 用随机长字符串
 
 # 2. 不设置 WEBDAV_PUBLIC_READ —— 保持私有
-# 3. （可选）普通变量：npx wrangler pages var put WEBDAV_SHARE_TTL 86400
+# 3. （可选）普通变量 WEBDAV_SHARE_TTL 在控制台添加（默认已是 86400）
 ```
 
 - 网页端与 WebDAV 全部需要登录；
@@ -97,21 +100,16 @@ npm start                      # 前端开发服务器（无后端功能）
 联调 WebDAV 后端（需要本机已装 wrangler，且可访问你的 R2 bucket）：
 
 ```bash
-cp .dev.vars.example .dev.vars # 填入本地凭据（.dev.vars 已被 gitignore）
+cp .dev.vars.example .dev.vars   # 填入本地凭据（.dev.vars 已被 gitignore）
 npm run build
-npx wrangler pages dev build
+# 无 wrangler.toml：R2 绑定需显式传入（--r2 BUCKET 指向你的远程桶）
+npx wrangler pages dev build --r2 BUCKET
 ```
 
-## CI 与自动部署
+## CI
 
 推送到 `main`（或提交 PR）会自动运行：`eslint` → `tsc --noEmit` → 测试（带覆盖率）→ 生产构建。
-
-启用 CI 自动部署到 Pages：
-1. 创建 Pages 项目：`npx wrangler pages project create flaredrive --production-branch main`
-2. 在仓库 Settings → Secrets 添加 `CLOUDFLARE_API_TOKEN`（Pages 编辑权限）与 `CLOUDFLARE_ACCOUNT_ID`
-3. 在控制台配置 `WEBDAV_*` 凭据
-
-未配置凭据时部署 job 自动跳过，不影响其他 CI 步骤。
+CI 只负责验证，**不自动部署**；部署请走 Pages 控制台 Git 集成（见"快速开始"）。
 
 ## 分享链接
 
@@ -151,9 +149,8 @@ npm test -- --watchAll=false --coverage   # 带覆盖率
 │   └── __tests__/          #   测试
 ├── functions/webdav/       # Pages Functions —— WebDAV 服务端（9 个方法 handler + 分享）
 ├── public/                 # 静态资源 / PWA
-├── wrangler.toml           # Pages 部署配置（R2 绑定、compatibility_date）
-├── .dev.vars.example       # 本地开发凭据模板
-└── .github/workflows/ci.yml # CI（lint/tsc/test/build + 可选自动部署）
+├── .dev.vars.example       # 本地开发凭据模板（复制为 .dev.vars）
+└── .github/workflows/ci.yml # CI（lint/tsc/test/build，验证用）
 ```
 
 ## 致谢

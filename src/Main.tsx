@@ -10,7 +10,7 @@ import {
 } from "@mui/material";
 import { Home as HomeIcon, NoteAdd as NoteAddIcon } from "@mui/icons-material";
 
-import FileGrid, { encodeKey, FileItem, isDirectory } from "./FileGrid";
+import FileGrid, { encodeKey, FileItem } from "./FileGrid";
 import MultiSelectToolbar from "./MultiSelectToolbar";
 import UploadDrawer, { UploadFab } from "./UploadDrawer";
 import TextPadDrawer from "./TextPadDrawer";
@@ -21,6 +21,7 @@ import {
   relativeBasedir,
 } from "./app/folderUpload";
 import { copyPaste, fetchPath } from "./app/transfer";
+import { SortOption, sortFiles } from "./app/sort";
 import { useTransferQueue, useUploadEnqueue } from "./app/transferQueue";
 
 // Centered helper
@@ -118,9 +119,11 @@ function DropZone({
 function Main({
   search,
   onError,
+  sort,
 }: {
   search: string;
   onError: (error: Error) => void;
+  sort: SortOption;
 }) {
   const [cwd, setCwd] = useState("");
   const [files, setFiles] = useState<FileItem[]>([]);
@@ -199,13 +202,15 @@ function Main({
 
   const filteredFiles = useMemo(
     () =>
-      (search
-        ? files.filter((file) =>
-            file.key.toLowerCase().includes(search.toLowerCase())
-          )
-        : files
-      ).sort((a, b) => (isDirectory(a) ? -1 : isDirectory(b) ? 1 : 0)),
-    [files, search]
+      sortFiles(
+        search
+          ? files.filter((file) =>
+              file.key.toLowerCase().includes(search.toLowerCase())
+            )
+          : files,
+        sort
+      ),
+    [files, search, sort]
   );
 
   const handleMultiSelect = useCallback((key: string) => {
