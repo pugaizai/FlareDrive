@@ -1,19 +1,14 @@
 import { ThemeProvider } from "@emotion/react";
 import {
-  Button,
   createTheme,
   CssBaseline,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
   GlobalStyles,
   Snackbar,
   Stack,
-  TextField,
 } from "@mui/material";
 import React, { useEffect, useState } from "react";
 
+import AuthDialog from "./AuthDialog";
 import Header from "./Header";
 import Main from "./Main";
 import ProgressDialog from "./ProgressDialog";
@@ -27,59 +22,6 @@ const globalStyles = (
 const theme = createTheme({
   palette: { primary: { main: "#f38020" } },
 });
-
-function AuthDialog({
-  open,
-  onClose,
-  onSave,
-}: {
-  open: boolean;
-  onClose: () => void;
-  onSave: (username: string, password: string) => void;
-}) {
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-
-  const submit = () => {
-    if (!username) return;
-    onSave(username, password);
-    setUsername("");
-    setPassword("");
-  };
-
-  return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="xs">
-      <DialogTitle>WebDAV Authentication</DialogTitle>
-      <DialogContent>
-        <TextField
-          label="Username"
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
-          fullWidth
-          margin="normal"
-          autoFocus
-        />
-        <TextField
-          label="Password"
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          fullWidth
-          margin="normal"
-          onKeyDown={(e) => {
-            if (e.key === "Enter") submit();
-          }}
-        />
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose}>Cancel</Button>
-        <Button variant="contained" onClick={submit} disabled={!username}>
-          Save
-        </Button>
-      </DialogActions>
-    </Dialog>
-  );
-}
 
 function App() {
   const [search, setSearch] = useState("");

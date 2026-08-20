@@ -350,6 +350,14 @@ function Main({
             const res = await webdavFetch(
               `/webdav/${encodeKey(multiSelected[0])}?share`
             );
+            if (res.status === 503) {
+              onError(
+                new Error(
+                  "Share links are not enabled. Set WEBDAV_SHARE_SECRET in your deployment to enable them."
+                )
+              );
+              return;
+            }
             if (!res.ok)
               throw new Error(`Share links are unavailable (${res.status})`);
             const { url } = (await res.json()) as { url: string };

@@ -1,3 +1,6 @@
+// jest-dom 匹配器（toBeDisabled/toBeInTheDocument 等）
+import "@testing-library/jest-dom";
+
 // CRA 的 jest 环境（jsdom）不提供 fetch/Response/Headers 全局，
 // 这里用最小实现补齐，仅满足本项目代码的用法。
 // 若 Node 已注入（较新环境），则跳过。
