@@ -53,35 +53,3 @@ jobs:
         with:
           name: build
           path: build
-
-  # 仅 main 分支推送时尝试部署；未配置 Cloudflare 凭据时自动跳过。
-  # 前置条件：
-  #   1. 仓库 Secrets：CLOUDFLARE_API_TOKEN（Pages 编辑权限）、CLOUDFLARE_ACCOUNT_ID
-  #   2. Pages 项目 "flaredrive" 已创建（wrangler pages project create flaredrive --production-branch main）
-  deploy:
-    needs: verify
-    if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    env:
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-    steps:
-      - uses: actions/checkout@v7
-
-      - uses: actions/download-artifact@v8
-        with:
-          name: build
-          path: build
-
-      - name: Skip unless credentials are configured
-        if: env.CLOUDFLARE_API_TOKEN == '' || env.CLOUDFLARE_ACCOUNT_ID == ''
-        run: |
-          echo "Cloudflare credentials not configured; skipping deployment."
-          echo "Add CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID secrets,"
-          echo "ensure the 'flaredrive' Pages project exists, and configure"
-          echo "WEBDAV_* credentials in the dashboard/secrets."
-
-      - name: Deploy to Cloudflare Pages
-        if: env.CLOUDFLARE_API_TOKEN != '' && env.CLOUDFLARE_ACCOUNT_ID != ''
-        run: npx --yes wrangler@4 pages deploy build --project-name flaredrive
