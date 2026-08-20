@@ -20,5 +20,5 @@ it("copies the URL to the clipboard and shows Copied", async () => {
   fireEvent.click(screen.getByRole("button", { name: "Copy" }));
 
   await waitFor(() => expect(writeText).toHaveBeenCalledWith(URL));
-  await waitFor(() => expect(screen.getByText("Copied")).toBeTruthy());
+  expect(await screen.findByText("Copied")).toBeTruthy();
 });
