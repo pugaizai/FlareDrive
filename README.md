@@ -1,5 +1,7 @@
 # FlareDrive
 
+[![CI](https://github.com/pugaizai/FlareDrive/actions/workflows/ci.yml/badge.svg)](https://github.com/pugaizai/FlareDrive/actions/workflows/ci.yml)
+
 Cloudflare R2 storage manager with Pages and Workers. Free 10 GB storage.
 Free serverless backend with a limit of 100,000 invocation requests per day.
 [More about pricing](https://developers.cloudflare.com/r2/platform/pricing/)
@@ -53,6 +55,14 @@ npx wrangler pages dev build
 ```
 
 - Do not commit real credentials: use the Pages dashboard or `npx wrangler pages secret put` in production.
+
+### CI
+
+Push to `main` runs `tsc`, `eslint`, the test suite (with coverage) and the
+production build. To enable automatic deployment from CI, add the
+`CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` secrets to the repository
+(and create the `flaredrive` Pages project first); the deploy job stays
+skipped until those secrets exist.
 
 ### Share links
 

@@ -13,6 +13,8 @@ bucket_name = "pan"
 # 环境变量：不要把真实凭据提交到仓库！
 # 生产环境建议在 Pages 控制台或通过 `npx wrangler pages secret put` 配置。
 # 本地开发可复制 .dev.vars.example 为 .dev.vars 填入。
+# 如果已经开了公开读，任何人都能直接下载文件，分享链接对“读”就冗余了（此时不设 `WEBDAV_SHARE_SECRET` 也无妨）
+# 只有关了公开读、又想给别人分享单个文件时， `WEBDAV_SHARE_SECRET` 才是必需品。
 [vars]
 WEBDAV_USERNAME = ""
 WEBDAV_PASSWORD = ""
