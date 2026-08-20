@@ -270,22 +270,15 @@ export async function copyPaste(
   }
 }
 
-export async function createFolder(cwd: string) {
-  try {
-    const folderName = window.prompt("Folder name");
-    if (!folderName) return;
-    if (folderName.includes("/")) {
-      window.alert("Invalid folder name");
-      return;
-    }
-    const folderKey = `${cwd}${folderName}`;
-    const uploadUrl = `${WEBDAV_ENDPOINT}${encodeKey(folderKey)}`;
-    const response = await webdavFetch(uploadUrl, { method: "MKCOL" });
-    if (!response.ok)
-      throw new Error(`Create folder failed with status ${response.status}`);
-  } catch (error) {
-    console.log(`Create folder failed`);
-  }
+/** 创建目录（纯 API，不做任何原生弹窗；名称校验失败时抛错） */
+export async function createFolderAt(cwd: string, folderName: string) {
+  if (!folderName || folderName.includes("/"))
+    throw new Error("Invalid folder name");
+  const folderKey = `${cwd}${folderName}`;
+  const uploadUrl = `${WEBDAV_ENDPOINT}${encodeKey(folderKey)}`;
+  const response = await webdavFetch(uploadUrl, { method: "MKCOL" });
+  if (!response.ok)
+    throw new Error(`Create folder failed with status ${response.status}`);
 }
 
 export async function processTransferTask({

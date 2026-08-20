@@ -1,5 +1,5 @@
-// copyPaste / createFolder 前端调用：请求方法、Destination/Overwrite 头、错误透传、文件名校验
-import { copyPaste, createFolder } from "../app/transfer";
+// copyPaste / createFolderAt 前端调用：请求方法、Destination/Overwrite 头、错误透传、文件名校验
+import { copyPaste, createFolderAt } from "../app/transfer";
 import { webdavFetch } from "../app/auth";
 
 jest.mock("../app/auth", () => ({
@@ -50,11 +50,9 @@ it("throws an error carrying the HTTP status on failure", async () => {
 });
 
 it("creates a folder via MKCOL", async () => {
-  window.prompt = jest.fn(() => "newdir");
-  window.alert = jest.fn();
   mockWebdavFetch.mockResolvedValue({ ok: true });
 
-  await createFolder("sub/");
+  await createFolderAt("sub/", "newdir");
   expect(mockWebdavFetch).toHaveBeenCalledWith(
     "/webdav/sub/newdir",
     expect.objectContaining({ method: "MKCOL" })
@@ -62,10 +60,8 @@ it("creates a folder via MKCOL", async () => {
 });
 
 it("rejects folder names containing / without calling the server", async () => {
-  window.prompt = jest.fn(() => "a/b");
-  window.alert = jest.fn();
-
-  await createFolder("");
-  expect(window.alert).toHaveBeenCalledWith("Invalid folder name");
+  await expect(createFolderAt("", "a/b")).rejects.toThrow(
+    "Invalid folder name"
+  );
   expect(mockWebdavFetch).not.toHaveBeenCalled();
 });

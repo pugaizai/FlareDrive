@@ -12,6 +12,8 @@ import { Home as HomeIcon, NoteAdd as NoteAddIcon } from "@mui/icons-material";
 
 import FileGrid, { encodeKey, FileItem } from "./FileGrid";
 import MultiSelectToolbar from "./MultiSelectToolbar";
+import PromptDialog from "./PromptDialog";
+import ShareDialog from "./ShareDialog";
 import UploadDrawer, { UploadFab } from "./UploadDrawer";
 import TextPadDrawer from "./TextPadDrawer";
 import { subscribeAuthChanged, webdavFetch } from "./app/auth";
@@ -135,6 +137,8 @@ function Main({
   const [showUploadDrawer, setShowUploadDrawer] = useState(false);
   const [showTextPadDrawer, setShowTextPadDrawer] = useState(false);
   const [lastUploadKey, setLastUploadKey] = useState<string | null>(null);
+  const [renameKey, setRenameKey] = useState<string | null>(null);
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
 
   const transferQueue = useTransferQueue();
   const uploadEnqueue = useUploadEnqueue();
@@ -320,26 +324,9 @@ function Main({
           a.click();
           URL.revokeObjectURL(url);
         }}
-        onRename={async () => {
+        onRename={() => {
           if (multiSelected?.length !== 1) return;
-          const newName = window.prompt("Rename to:");
-          if (!newName) return;
-          if (newName.includes("/")) {
-            window.alert("Invalid file name");
-            return;
-          }
-          try {
-            // Overwrite: F —— 目标已存在时服务端返回 412，绝不静默覆盖
-            await copyPaste(multiSelected[0], cwd + newName, true, true);
-          } catch (error) {
-            if ((error as { status?: number })?.status === 412) {
-              window.alert(`"${newName}" already exists`);
-            } else {
-              onError(error as Error);
-            }
-            return;
-          }
-          fetchFiles();
+          setRenameKey(multiSelected[0]);
         }}
         onDelete={async () => {
           if (!multiSelected?.length) return;
@@ -370,15 +357,42 @@ function Main({
             if (!res.ok)
               throw new Error(`Share links are unavailable (${res.status})`);
             const { url } = (await res.json()) as { url: string };
-            if (navigator.share) {
-              await navigator.share({ url }).catch(() => {});
-            } else {
-              window.prompt("Share link:", url);
-            }
+            setShareUrl(url);
           } catch (error) {
             onError(error as Error);
           }
         }}
+      />
+
+      <PromptDialog
+        open={renameKey !== null}
+        title="Rename"
+        label="New name"
+        initialValue={renameKey ? renameKey.split("/").pop() : ""}
+        onSubmit={async (newName) => {
+          const source = renameKey;
+          setRenameKey(null);
+          if (!source) return;
+          try {
+            // Overwrite: F —— 目标已存在时服务端返回 412，绝不静默覆盖
+            await copyPaste(source, cwd + newName, true, true);
+          } catch (error) {
+            if ((error as { status?: number })?.status === 412) {
+              onError(new Error(`"${newName}" already exists`));
+            } else {
+              onError(error as Error);
+            }
+            return;
+          }
+          fetchFiles();
+        }}
+        onClose={() => setRenameKey(null)}
+      />
+
+      <ShareDialog
+        open={shareUrl !== null}
+        url={shareUrl ?? ""}
+        onClose={() => setShareUrl(null)}
       />
     </>
   );

@@ -1,4 +1,4 @@
-import React, { forwardRef, useCallback, useMemo } from "react";
+import React, { forwardRef, useCallback, useMemo, useState } from "react";
 
 import { Button, Card, Drawer, Fab, Grid, Typography } from "@mui/material";
 import {
@@ -8,7 +8,8 @@ import {
   Image as ImageIcon,
   Upload as UploadIcon,
 } from "@mui/icons-material";
-import { createFolder } from "./app/transfer";
+import PromptDialog from "./PromptDialog";
+import { createFolderAt } from "./app/transfer";
 import {
   ensureDirectories,
   relativeBasedir,
@@ -71,6 +72,17 @@ function UploadDrawer({
   onUpload: () => void;
 }) {
   const uploadEnqueue = useUploadEnqueue();
+  const [folderDialogOpen, setFolderDialogOpen] = useState(false);
+
+  const handleCreateFolder = async (folderName: string) => {
+    setFolderDialogOpen(false);
+    try {
+      await createFolderAt(cwd, folderName);
+    } catch (error) {
+      console.log(`Create folder failed: ${error}`);
+    }
+    onUpload();
+  };
 
   const handleUpload = useCallback(
     (action: string) => () => {
@@ -172,15 +184,18 @@ function UploadDrawer({
             <IconCaptionButton
               icon={<CreateNewFolderIcon fontSize="large" />}
               caption="Create Folder"
-              onClick={async () => {
-                setOpen(false);
-                await createFolder(cwd);
-                onUpload();
-              }}
+              onClick={() => setFolderDialogOpen(true)}
             />
           </Grid>
         </Grid>
       </Card>
+      <PromptDialog
+        open={folderDialogOpen}
+        title="Create Folder"
+        label="Folder name"
+        onSubmit={handleCreateFolder}
+        onClose={() => setFolderDialogOpen(false)}
+      />
     </Drawer>
   );
 }

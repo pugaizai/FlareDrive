@@ -78,6 +78,20 @@ function FileRow({
   onMultiSelect: (key: string) => void;
   onCwdChange: (newCwd: string) => void;
 }) {
+  // 预览走应用自己的认证（带 Authorization 头的 fetch → Blob → 新标签页），
+  // 不再 window.open 直连 /webdav（那会触发浏览器原生 Basic Auth 弹窗）。
+  const openFile = async () => {
+    try {
+      const res = await webdavFetch(`/webdav/${encodeKey(file.key)}`);
+      if (!res.ok) return; // 401 时 webdavFetch 已通知登录弹窗
+      const blob = await res.blob();
+      // 新标签页在后台流式读取 blob，过早 revoke 会中断；交由页面生命周期回收
+      window.open(URL.createObjectURL(blob), "_blank", "noopener,noreferrer");
+    } catch {
+      // 忽略：网络错误等不打断用户操作
+    }
+  };
+
   return (
     <ListItemButton
       selected={multiSelected?.includes(file.key)}
@@ -86,12 +100,7 @@ function FileRow({
           onMultiSelect(file.key);
         } else if (isDirectory(file)) {
           onCwdChange(file.key + "/");
-        } else
-          window.open(
-            `/webdav/${encodeKey(file.key)}`,
-            "_blank",
-            "noopener,noreferrer"
-          );
+        } else openFile();
       }}
       onContextMenu={(e) => {
         e.preventDefault();
