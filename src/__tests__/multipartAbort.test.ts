@@ -1,6 +1,6 @@
 // multipart 上传：分块失败时中止旧上传（不残留孤儿分块）
 import { multipartUpload, SIZE_LIMIT } from "../app/transfer";
-import { webdavFetch } from "../app/auth";
+import { webdavFetch, notifyUnauthorized } from "../app/auth";
 
 jest.mock("../app/auth", () => ({
   webdavFetch: jest.fn(),
@@ -18,9 +18,10 @@ jest.mock("p-limit", () => (concurrency: number) => {
 
 const mockWebdavFetch = webdavFetch as jest.Mock;
 
-// 模拟 XHR：静态控制成功/失败
+// 模拟 XHR：静态控制成功/失败/状态码
 class FakeXHR {
   static fail = true;
+  static statusCode = 500;
   upload = { onprogress: null as unknown };
   status = 0;
   responseText = "";
@@ -38,7 +39,7 @@ class FakeXHR {
       if (FakeXHR.fail) {
         this.onerror?.();
       } else {
-        this.status = 200;
+        this.status = FakeXHR.statusCode;
         this.responseHeaders = 'etag: "etag-1"\r\n';
         this.onload?.();
       }
@@ -94,4 +95,18 @@ it("does not abort on a successful multipart upload", async () => {
     ([, init]) => (init as RequestInit)?.method === "DELETE"
   );
   expect(deleteCalls).toHaveLength(0);
+});
+
+it("notifies the auth dialog when a part upload returns 401", async () => {
+  FakeXHR.fail = false;
+  FakeXHR.statusCode = 401;
+  mockWebdavFetch
+    .mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ uploadId: "u3" }),
+    })
+    .mockResolvedValueOnce({ ok: true, text: async () => "" });
+
+  await multipartUpload("big.bin", makeBigFile(SIZE_LIMIT));
+  expect(notifyUnauthorized).toHaveBeenCalled();
 });

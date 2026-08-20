@@ -73,3 +73,33 @@ it("moves a file: copies to the destination then deletes the source", async () =
   expect(bucket.put).toHaveBeenCalledWith("b.txt", expect.anything(), expect.anything());
   expect(bucket.delete).toHaveBeenCalledWith("a.txt");
 });
+
+it("treats a 404 source as an already-completed move", async () => {
+  // 源对象不存在（如并发删除或重复 MOVE）：返回 204 而非报错
+  const bucket = makeBucket(() => null);
+  const res = await handleRequestMove({
+    bucket,
+    path: "a.txt",
+    request: request({ Destination: "https://example.com/webdav/b.txt" }),
+  } as any);
+
+  expect(res.status).toBe(204);
+  expect(bucket.put).toHaveBeenCalled();
+});
+
+it("returns 503 with Retry-After when the source cannot be deleted", async () => {
+  const bucket = makeBucket((key) => (key === "a.txt" ? fileObject : null));
+  bucket.delete = jest.fn(async () => {
+    throw new Error("boom");
+  });
+
+  const res = await handleRequestMove({
+    bucket,
+    path: "a.txt",
+    request: request({ Destination: "https://example.com/webdav/b.txt" }),
+  } as any);
+
+  expect(res.status).toBe(503);
+  expect(res.headers.get("Retry-After")).toBe("5");
+  expect(bucket.delete).toHaveBeenCalledTimes(3); // 初试 + 2 次重试
+});
