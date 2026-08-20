@@ -58,7 +58,6 @@ jobs:
   # 前置条件：
   #   1. 仓库 Secrets：CLOUDFLARE_API_TOKEN（Pages 编辑权限）、CLOUDFLARE_ACCOUNT_ID
   #   2. Pages 项目 "flaredrive" 已创建（wrangler pages project create flaredrive --production-branch main）
-  #   3. WEBDAV_* 凭据已在 Pages 控制台或通过 wrangler pages secret put 配置（见 wrangler.toml 注释）
   deploy:
     needs: verify
     if: github.ref == 'refs/heads/main'
