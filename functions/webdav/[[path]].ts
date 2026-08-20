@@ -15,6 +15,7 @@ import { handleRequestPropfind } from "./propfind";
 import { handleRequestPut } from "./put";
 import { RequestHandlerParams } from "./utils";
 import { handleRequestPost } from "./post";
+import { handleRequestSharePage } from "./share";
 
 async function handleRequestOptions() {
   return new Response(null, {
@@ -119,6 +120,14 @@ export const onRequest: PagesFunction<{
     return new Response(JSON.stringify({ url: shareUrl }), {
       headers: { "Content-Type": "application/json" },
     });
+  }
+
+  // 分享链接预览页：浏览器导航（Accept: text/html）且 token 有效时渲染下载页；
+  // ?dl=1 直接强制附件下载（走 get.ts）；非 HTML 客户端保持原始字节（API 兼容）。
+  const wantsDownload = searchParams.get("dl") === "1";
+  const acceptsHtml = request.headers.get("Accept")?.includes("text/html") ?? false;
+  if (request.method === "GET" && tokenValid && !wantsDownload && acceptsHtml) {
+    return handleRequestSharePage({ bucket, path, request });
   }
 
   const method: string = (context.request as Request).method;
