@@ -23,6 +23,7 @@ import {
 import { copyPaste, fetchPath } from "./app/transfer";
 import { SortOption, sortFiles } from "./app/sort";
 import { useTransferQueue, useUploadEnqueue } from "./app/transferQueue";
+import { ViewOption } from "./app/view";
 
 // Centered helper
 function Centered({ children }: { children: React.ReactNode }) {
@@ -120,10 +121,12 @@ function Main({
   search,
   onError,
   sort,
+  view,
 }: {
   search: string;
   onError: (error: Error) => void;
   sort: SortOption;
+  view: ViewOption;
 }) {
   const [cwd, setCwd] = useState("");
   const [files, setFiles] = useState<FileItem[]>([]);
@@ -263,6 +266,7 @@ function Main({
             multiSelected={multiSelected}
             onMultiSelect={handleMultiSelect}
             emptyMessage={<Centered>No files or folders</Centered>}
+            view={view}
           />
         </DropZone>
       )}

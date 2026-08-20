@@ -12,6 +12,7 @@ import {
   MoreHoriz as MoreHorizIcon,
 } from "@mui/icons-material";
 import { SORT_OPTIONS, SortOption } from "./app/sort";
+import { VIEW_OPTIONS, ViewOption } from "./app/view";
 
 function Header({
   search,
@@ -19,20 +20,31 @@ function Header({
   setShowProgressDialog,
   sort,
   onSortChange,
+  view,
+  onViewChange,
 }: {
   search: string;
   onSearchChange: (newSearch: string) => void;
   setShowProgressDialog: (show: boolean) => void;
   sort: SortOption;
   onSortChange: (sort: SortOption) => void;
+  view: ViewOption;
+  onViewChange: (view: ViewOption) => void;
 }) {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
-  const [view, setView] = useState<"main" | "sort">("main");
+  const [submenu, setSubmenu] = useState<"sort" | "view" | null>(null);
 
   const close = () => {
     setAnchorEl(null);
-    setView("main");
+    setSubmenu(null);
   };
+
+  const submenuOptions = submenu === "sort" ? SORT_OPTIONS : VIEW_OPTIONS;
+  const currentValue: string = submenu === "sort" ? sort : view;
+  const onSelect =
+    submenu === "sort"
+      ? (value: string) => onSortChange(value as SortOption)
+      : (value: string) => onViewChange(value as ViewOption);
 
   return (
     <Toolbar disableGutters sx={{ padding: 1 }}>
@@ -54,16 +66,16 @@ function Header({
         sx={{ marginLeft: 0.5 }}
         onClick={(e) => {
           setAnchorEl(e.currentTarget);
-          setView("main");
+          setSubmenu(null);
         }}
       >
         <MoreHorizIcon />
       </IconButton>
       <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={close}>
-        {view === "main" ? (
+        {submenu === null ? (
           <div>
-            <MenuItem onClick={() => setView("sort")}>Sort by</MenuItem>
-            <MenuItem disabled>View as</MenuItem>
+            <MenuItem onClick={() => setSubmenu("view")}>View as</MenuItem>
+            <MenuItem onClick={() => setSubmenu("sort")}>Sort by</MenuItem>
             <MenuItem
               onClick={() => {
                 close();
@@ -75,21 +87,21 @@ function Header({
           </div>
         ) : (
           <div>
-            <MenuItem onClick={() => setView("main")}>
+            <MenuItem onClick={() => setSubmenu(null)}>
               <ArrowBackIcon fontSize="small" sx={{ mr: 1 }} />
               Back
             </MenuItem>
-            {SORT_OPTIONS.map((option) => (
+            {submenuOptions.map((option) => (
               <MenuItem
                 key={option.value}
-                selected={sort === option.value}
+                selected={currentValue === option.value}
                 onClick={() => {
-                  onSortChange(option.value);
+                  onSelect(option.value);
                   close();
                 }}
               >
                 {option.label}
-                {sort === option.value && (
+                {currentValue === option.value && (
                   <CheckIcon fontSize="small" sx={{ ml: 1 }} />
                 )}
               </MenuItem>

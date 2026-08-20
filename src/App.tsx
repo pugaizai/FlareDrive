@@ -15,6 +15,7 @@ import ProgressDialog from "./ProgressDialog";
 import { saveCredentials, subscribeUnauthorized } from "./app/auth";
 import { SortOption } from "./app/sort";
 import { TransferQueueProvider } from "./app/transferQueue";
+import { ViewOption } from "./app/view";
 
 const globalStyles = (
   <GlobalStyles styles={{ "html, body, #root": { height: "100%" } }} />
@@ -27,6 +28,7 @@ const theme = createTheme({
 function App() {
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<SortOption>("name-asc");
+  const [view, setView] = useState<ViewOption>("grid");
   const [showProgressDialog, setShowProgressDialog] = React.useState(false);
   const [error, setError] = useState<Error | null>(null);
   const [showAuthDialog, setShowAuthDialog] = useState(false);
@@ -51,8 +53,10 @@ function App() {
             setShowProgressDialog={setShowProgressDialog}
             sort={sort}
             onSortChange={setSort}
+            view={view}
+            onViewChange={setView}
           />
-          <Main search={search} onError={setError} sort={sort} />
+          <Main search={search} onError={setError} sort={sort} view={view} />
         </Stack>
         <Snackbar
           autoHideDuration={5000}

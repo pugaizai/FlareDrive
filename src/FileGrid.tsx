@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import {
   Box,
   Grid,
+  List,
   ListItemButton,
   ListItemIcon,
   ListItemText,
@@ -10,6 +11,7 @@ import ImageIcon from "@mui/icons-material/Image";
 import MimeIcon from "./MimeIcon";
 import { webdavFetch } from "./app/auth";
 import { humanReadableSize } from "./app/utils";
+import { ViewOption } from "./app/view";
 
 export interface FileItem {
   key: string;
@@ -64,78 +66,115 @@ function Thumbnail({ digest, alt }: { digest: string; alt: string }) {
   );
 }
 
+// 网格/列表共用的单行内容
+function FileRow({
+  file,
+  multiSelected,
+  onMultiSelect,
+  onCwdChange,
+}: {
+  file: FileItem;
+  multiSelected: string[] | null;
+  onMultiSelect: (key: string) => void;
+  onCwdChange: (newCwd: string) => void;
+}) {
+  return (
+    <ListItemButton
+      selected={multiSelected?.includes(file.key)}
+      onClick={() => {
+        if (multiSelected !== null) {
+          onMultiSelect(file.key);
+        } else if (isDirectory(file)) {
+          onCwdChange(file.key + "/");
+        } else
+          window.open(
+            `/webdav/${encodeKey(file.key)}`,
+            "_blank",
+            "noopener,noreferrer"
+          );
+      }}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        onMultiSelect(file.key);
+      }}
+      sx={{ userSelect: "none" }}
+    >
+      <ListItemIcon>
+        {file.customMetadata?.thumbnail ? (
+          <Thumbnail digest={file.customMetadata.thumbnail} alt={file.key} />
+        ) : (
+          <MimeIcon contentType={file.httpMetadata.contentType} />
+        )}
+      </ListItemIcon>
+      <ListItemText
+        primary={extractFilename(file.key)}
+        primaryTypographyProps={{
+          whiteSpace: "nowrap",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+        }}
+        secondary={
+          <React.Fragment>
+            <Box
+              sx={{
+                display: "inline-block",
+                minWidth: "160px",
+                marginRight: 1,
+              }}
+            >
+              {new Date(file.uploaded).toLocaleString()}
+            </Box>
+            {!isDirectory(file) && humanReadableSize(file.size)}
+          </React.Fragment>
+        }
+      />
+    </ListItemButton>
+  );
+}
+
 function FileGrid({
   files,
   onCwdChange,
   multiSelected,
   onMultiSelect,
   emptyMessage,
+  view,
 }: {
   files: FileItem[];
   onCwdChange: (newCwd: string) => void;
   multiSelected: string[] | null;
   onMultiSelect: (key: string) => void;
   emptyMessage?: React.ReactNode;
+  view: ViewOption;
 }) {
-  return files.length === 0 ? (
-    emptyMessage
-  ) : (
+  if (files.length === 0) return <>{emptyMessage}</>;
+
+  if (view === "list") {
+    return (
+      <List sx={{ paddingBottom: "48px" }}>
+        {files.map((file) => (
+          <FileRow
+            key={file.key}
+            file={file}
+            multiSelected={multiSelected}
+            onMultiSelect={onMultiSelect}
+            onCwdChange={onCwdChange}
+          />
+        ))}
+      </List>
+    );
+  }
+
+  return (
     <Grid container sx={{ paddingBottom: "48px" }}>
       {files.map((file) => (
         <Grid item key={file.key} xs={12} sm={6} md={4} lg={3} xl={2}>
-          <ListItemButton
-            selected={multiSelected?.includes(file.key)}
-            onClick={() => {
-              if (multiSelected !== null) {
-                onMultiSelect(file.key);
-              } else if (isDirectory(file)) {
-                onCwdChange(file.key + "/");
-              } else
-                window.open(
-                  `/webdav/${encodeKey(file.key)}`,
-                  "_blank",
-                  "noopener,noreferrer"
-                );
-            }}
-            onContextMenu={(e) => {
-              e.preventDefault();
-              onMultiSelect(file.key);
-            }}
-            sx={{ userSelect: "none" }}
-          >
-            <ListItemIcon>
-              {file.customMetadata?.thumbnail ? (
-                <Thumbnail
-                  digest={file.customMetadata.thumbnail}
-                  alt={file.key}
-                />
-              ) : (
-                <MimeIcon contentType={file.httpMetadata.contentType} />
-              )}
-            </ListItemIcon>
-            <ListItemText
-              primary={extractFilename(file.key)}
-              primaryTypographyProps={{
-                whiteSpace: "nowrap",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-              }}
-              secondary={
-                <React.Fragment>
-                  <Box
-                    sx={{
-                      display: "inline-block",
-                      minWidth: "160px",
-                      marginRight: 1,
-                    }}
-                  >
-                    {new Date(file.uploaded).toLocaleString()}
-                  </Box>
-                  {!isDirectory(file) && humanReadableSize(file.size)}
-                </React.Fragment>
-              }
-            />
-          </ListItemButton>
+          <FileRow
+            file={file}
+            multiSelected={multiSelected}
+            onMultiSelect={onMultiSelect}
+            onCwdChange={onCwdChange}
+          />
         </Grid>
       ))}
     </Grid>
