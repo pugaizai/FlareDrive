@@ -1,14 +1,14 @@
 # FlareDrive —— Cloudflare Pages 配置
 # 参考：https://developers.cloudflare.com/pages/functions/wrangler-configuration/
-name = "flare-drive"
-compatibility_date = "2024-06-20"
+name = "flaredrive"
+compatibility_date = "2026-08-19"
 pages_build_output_dir = "build"
 
 # R2 存储桶绑定：把 bucket_name 替换为你实际创建的 bucket 名称。
 # 也可以不填此处，改在 Pages 控制台里手动绑定名为 BUCKET 的存储桶。
 [[r2_buckets]]
 binding = "BUCKET"
-bucket_name = "flare-drive" # TODO: 替换为你的 R2 bucket 名称
+bucket_name = "pan"
 
 # 环境变量：不要把真实凭据提交到仓库！
 # 生产环境建议在 Pages 控制台或通过 `npx wrangler pages secret put` 配置。
@@ -20,4 +20,4 @@ WEBDAV_PASSWORD = ""
 # 分享链接签名密钥（配置后网页端可生成短时效签名链接，接收方免认证下载）
 # WEBDAV_SHARE_SECRET = "change-me"
 # 分享链接有效期（秒），默认 86400（24 小时）
-# WEBDAV_SHARE_TTL = "86400"
+WEBDAV_SHARE_TTL = "86400"
