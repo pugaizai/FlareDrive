@@ -16,8 +16,8 @@ bucket_name = "pan"
 [vars]
 WEBDAV_USERNAME = ""
 WEBDAV_PASSWORD = ""
-# WEBDAV_PUBLIC_READ = "1"
+WEBDAV_PUBLIC_READ = "1"
 # 分享链接签名密钥（配置后网页端可生成短时效签名链接，接收方免认证下载）
-# WEBDAV_SHARE_SECRET = "change-me"
+WEBDAV_SHARE_SECRET = "change-me"
 # 分享链接有效期（秒），默认 86400（24 小时）
 WEBDAV_SHARE_TTL = "86400"
