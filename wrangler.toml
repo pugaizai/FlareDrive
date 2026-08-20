@@ -3,23 +3,3 @@
 name = "flaredrive"
 compatibility_date = "2026-08-19"
 pages_build_output_dir = "build"
-
-# R2 存储桶绑定：把 bucket_name 替换为你实际创建的 bucket 名称。
-# 也可以不填此处，改在 Pages 控制台里手动绑定名为 BUCKET 的存储桶。
-[[r2_buckets]]
-binding = "BUCKET"
-bucket_name = "pan"
-
-# 环境变量：不要把真实凭据提交到仓库！
-# 生产环境建议在 Pages 控制台或通过 `npx wrangler pages secret put` 配置。
-# 本地开发可复制 .dev.vars.example 为 .dev.vars 填入。
-# 如果已经开了公开读，任何人都能直接下载文件，分享链接对“读”就冗余了（此时不设 `WEBDAV_SHARE_SECRET` 也无妨）
-# 只有关了公开读、又想给别人分享单个文件时， `WEBDAV_SHARE_SECRET` 才是必需品。
-[vars]
-WEBDAV_USERNAME = ""
-WEBDAV_PASSWORD = ""
-WEBDAV_PUBLIC_READ = "1"
-# 分享链接签名密钥（配置后网页端可生成短时效签名链接，接收方免认证下载）
-WEBDAV_SHARE_SECRET = "change-me"
-# 分享链接有效期（秒），默认 86400（24 小时）
-WEBDAV_SHARE_TTL = "86400"
