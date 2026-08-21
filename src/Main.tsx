@@ -271,6 +271,9 @@ function Main({
             onMultiSelect={handleMultiSelect}
             emptyMessage={<Centered>No files or folders</Centered>}
             view={view}
+            onSelectMany={(keys) =>
+              setMultiSelected(keys.length ? keys : null)
+            }
           />
         </DropZone>
       )}

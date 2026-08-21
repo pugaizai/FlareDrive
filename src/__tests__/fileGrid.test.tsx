@@ -21,7 +21,25 @@ const baseProps = {
   onCwdChange: jest.fn(),
   multiSelected: null,
   onMultiSelect: jest.fn(),
+  onSelectMany: jest.fn(),
   emptyMessage: <div>No files or folders</div>,
+};
+
+// 为容器与行提供矩形几何，使框选相交计算在 jsdom 中可测
+const mockRects = (container: HTMLElement) => {
+  const crect = {
+    left: 0, top: 0, right: 800, bottom: 600, width: 800, height: 600,
+    x: 0, y: 0, toJSON: () => ({}),
+  } as DOMRect;
+  jest.spyOn(container, "getBoundingClientRect").mockReturnValue(crect);
+  // 需要真实行元素来模拟矩形几何，属规则允许的例外
+  // eslint-disable-next-line testing-library/no-node-access
+  container.querySelectorAll<HTMLElement>("[data-key]").forEach((row, i) => {
+    jest.spyOn(row, "getBoundingClientRect").mockReturnValue({
+      left: i * 100, top: 0, right: i * 100 + 80, bottom: 50,
+      width: 80, height: 50, x: i * 100, y: 0, toJSON: () => ({}),
+    } as DOMRect);
+  });
 };
 
 beforeEach(() => {
@@ -77,4 +95,68 @@ it("previews a file via authenticated fetch, not a native navigation", async () 
       "noopener,noreferrer"
     )
   );
+});
+
+it("box-selects files by dragging", () => {
+  const onSelectMany = jest.fn();
+  render(
+    <FileGrid
+      files={[item("a.txt"), item("b.txt"), item("c.txt")]}
+      onCwdChange={jest.fn()}
+      multiSelected={null}
+      onMultiSelect={jest.fn()}
+      view="grid"
+      onSelectMany={onSelectMany}
+    />
+  );
+  const container = screen.getByTestId("file-grid");
+  mockRects(container);
+
+  fireEvent.mouseDown(container, { clientX: 0, clientY: 0, button: 0 });
+  fireEvent.mouseMove(document, { clientX: 250, clientY: 60 });
+  fireEvent.mouseUp(document, { clientX: 250, clientY: 60 });
+
+  // 三行分别位于 x=0/100/200，宽 80，全部与 0..250 的框相交
+  expect(onSelectMany).toHaveBeenCalledWith(["a.txt", "b.txt", "c.txt"]);
+});
+
+it("does not open a file when box-dragging over a row", () => {
+  (webdavFetch as jest.Mock).mockResolvedValue({
+    ok: true,
+    blob: async () => new Blob(["x"]),
+  });
+  jest.spyOn(window, "open").mockImplementation(() => null);
+  Object.defineProperty(URL, "createObjectURL", {
+    writable: true,
+    configurable: true,
+    value: jest.fn(() => "blob:fake"),
+  });
+  Object.defineProperty(URL, "revokeObjectURL", {
+    writable: true,
+    configurable: true,
+    value: jest.fn(),
+  });
+
+  const onSelectMany = jest.fn();
+  render(
+    <FileGrid
+      files={[item("a.txt"), item("b.txt")]}
+      onCwdChange={jest.fn()}
+      multiSelected={null}
+      onMultiSelect={jest.fn()}
+      view="grid"
+      onSelectMany={onSelectMany}
+    />
+  );
+  const container = screen.getByTestId("file-grid");
+  mockRects(container);
+  // eslint-disable-next-line testing-library/no-node-access
+  const row = container.querySelector('[data-key="a.txt"]') as HTMLElement;
+
+  fireEvent.mouseDown(row, { clientX: 0, clientY: 0, button: 0 });
+  fireEvent.mouseMove(document, { clientX: 120, clientY: 40 });
+  fireEvent.mouseUp(document, { clientX: 120, clientY: 40 });
+
+  expect(onSelectMany).toHaveBeenCalled();
+  expect(webdavFetch).not.toHaveBeenCalled(); // 框选拖拽不应触发文件打开
 });
