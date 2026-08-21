@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { IconButton, Menu, MenuItem, Slide, Toolbar } from "@mui/material";
 import {
   Close as CloseIcon,
@@ -23,6 +23,11 @@ function MultiSelectToolbar({
   onShare: () => void;
 }) {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+
+  // 选择状态变化时关闭二级菜单，避免重命名/删除后再次选中时菜单残留弹开
+  useEffect(() => {
+    setAnchorEl(null);
+  }, [multiSelected]);
 
   return (
     <Slide direction="up" in={multiSelected !== null}>
@@ -54,6 +59,7 @@ function MultiSelectToolbar({
           <DeleteIcon />
         </IconButton>
         <IconButton
+          aria-label="More"
           color="primary"
           disabled={
             multiSelected?.length !== 1 || multiSelected[0].endsWith("/")
@@ -70,8 +76,22 @@ function MultiSelectToolbar({
           >
             {multiSelected.length === 1 && (
               <React.Fragment>
-                <MenuItem onClick={onRename}>Rename</MenuItem>
-                <MenuItem onClick={onShare}>Share</MenuItem>
+                <MenuItem
+                  onClick={() => {
+                    setAnchorEl(null);
+                    onRename();
+                  }}
+                >
+                  Rename
+                </MenuItem>
+                <MenuItem
+                  onClick={() => {
+                    setAnchorEl(null);
+                    onShare();
+                  }}
+                >
+                  Share
+                </MenuItem>
               </React.Fragment>
             )}
           </Menu>
