@@ -278,7 +278,12 @@ function FileGrid({
     <Box
       ref={containerRef}
       data-testid="file-grid"
-      sx={{ position: "relative", userSelect: box ? "none" : undefined }}
+      // minHeight 撑满滚动容器视口，使行下方的空白区域也能开始框选
+      sx={{
+        position: "relative",
+        minHeight: "100%",
+        userSelect: box ? "none" : undefined,
+      }}
       onMouseDown={handleMouseDown}
     >
       {view === "list" ? (
