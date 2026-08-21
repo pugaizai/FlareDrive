@@ -49,6 +49,37 @@ it("throws an error carrying the HTTP status on failure", async () => {
   await expect(copyPaste("a.txt", "b.txt", true, true)).rejects.toThrow(/412/);
 });
 
+it("retries a COPY on 503 (batching) until it completes", async () => {
+  // Retry-After 用极小值，让 sleep 走真实定时器且几乎不耗时
+  mockWebdavFetch
+    .mockResolvedValueOnce({
+      ok: false,
+      status: 503,
+      headers: { get: () => "0.001" },
+    })
+    .mockResolvedValueOnce({
+      ok: false,
+      status: 503,
+      headers: { get: () => "0.001" },
+    })
+    .mockResolvedValueOnce({ ok: true, status: 201, headers: { get: () => null } });
+
+  await copyPaste("a.txt", "b.txt", false);
+
+  expect(mockWebdavFetch).toHaveBeenCalledTimes(3);
+});
+
+it("does not retry a MOVE on 503 (destination may already exist on retry)", async () => {
+  mockWebdavFetch.mockResolvedValue({
+    ok: false,
+    status: 503,
+    headers: { get: () => "0.001" },
+  });
+
+  await expect(copyPaste("a.txt", "b.txt", true)).rejects.toThrow(/503/);
+  expect(mockWebdavFetch).toHaveBeenCalledTimes(1);
+});
+
 it("creates a folder via MKCOL", async () => {
   mockWebdavFetch.mockResolvedValue({ ok: true });
 

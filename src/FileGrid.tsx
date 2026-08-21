@@ -40,6 +40,42 @@ export function isDirectory(file: FileItem) {
   return file.httpMetadata?.contentType === "application/x-directory";
 }
 
+// ---- 框选边缘自动滚动 ----
+
+// 指针靠近滚动容器上下边缘这段距离时开始自动滚动
+const EDGE_SCROLL_ZONE = 48;
+
+// 找到最近的滚动容器（DropZone 等 overflowY: auto/scroll 的祖先）
+function findScrollableAncestor(el: HTMLElement | null): HTMLElement | null {
+  let node = el?.parentElement ?? null;
+  while (node) {
+    const style = getComputedStyle(node);
+    if (
+      /(auto|scroll)/.test(style.overflowY) &&
+      node.scrollHeight > node.clientHeight
+    )
+      return node;
+    node = node.parentElement;
+  }
+  return null;
+}
+
+// 指针越靠近边缘滚动越快；在边缘之外返回 0（停止滚动）
+function edgeScrollDelta(scroller: HTMLElement, clientY: number): number {
+  const rect = scroller.getBoundingClientRect();
+  if (clientY < rect.top + EDGE_SCROLL_ZONE)
+    return -Math.max(
+      6,
+      Math.ceil((rect.top + EDGE_SCROLL_ZONE - clientY) / 2)
+    );
+  if (clientY > rect.bottom - EDGE_SCROLL_ZONE)
+    return Math.max(
+      6,
+      Math.ceil((clientY - (rect.bottom - EDGE_SCROLL_ZONE)) / 2)
+    );
+  return 0;
+}
+
 // <img> 标签无法携带 Authorization 头，缩略图通过带认证的 fetch 加载为 Blob
 function Thumbnail({ digest, alt }: { digest: string; alt: string }) {
   const [src, setSrc] = useState<string | null>(null);
@@ -68,6 +104,9 @@ function Thumbnail({ digest, alt }: { digest: string; alt: string }) {
     <img
       src={src}
       alt={alt}
+      // 关键：img 默认可被浏览器原生拖拽，会吞掉 mousemove 导致框选失效；
+      // 容器层还有 onDragStart 兜底拦截
+      draggable={false}
       style={{ width: 36, height: 36, objectFit: "cover" }}
     />
   );
@@ -143,7 +182,9 @@ function FileRow({
         }}
         secondary={
           <React.Fragment>
+            {/* secondary 渲染为 <p>，内部不能放块级 <div>，用 span 保持行内布局 */}
             <Box
+              component="span"
               sx={{
                 display: "inline-block",
                 minWidth: "160px",
@@ -159,6 +200,16 @@ function FileRow({
     </ListItemButton>
   );
 }
+
+// 行组件 memo：父级因搜索/排序等重渲染时，未变化的行不重渲染。
+// 比较只依赖 file 引用、多选状态与框选高亮（回调来自 Main，均稳定）。
+const MemoFileRow = React.memo(
+  FileRow,
+  (prev, next) =>
+    prev.file === next.file &&
+    prev.multiSelected === next.multiSelected &&
+    prev.boxKeys === next.boxKeys
+);
 
 function FileGrid({
   files,
@@ -184,6 +235,10 @@ function FileGrid({
     y: number;
     started: boolean;
     onRow: boolean;
+    pointerId: number;
+    scroller: HTMLElement | null;
+    rafId: number | null;
+    lastClientY: number;
   } | null>(null);
   const boxRef = useRef<BoxRect | null>(null);
   const [box, setBox] = useState<BoxRect | null>(null);
@@ -209,60 +264,111 @@ function FileGrid({
     return keys;
   };
 
-  const handleMouseDown = (e: React.MouseEvent) => {
+  const stopDrag = () => {
+    const start = dragStart.current;
+    dragStart.current = null;
+    boxRef.current = null;
+    if (start?.rafId != null) cancelAnimationFrame(start.rafId);
+    setBox(null);
+    setBoxKeys([]);
+  };
+
+  // Pointer Events + setPointerCapture：事件跟随指针（拖出窗口/容器仍送达），
+  // 无需 document 级监听，天然避免监听器泄漏；mouse/pen 可用，touch 保留原生滚动
+  const handlePointerDown = (e: React.PointerEvent) => {
+    // 触屏：框选与列表滚动共用同一手势，直接接管会破坏滚动，保持原生行为
+    if (e.pointerType === "touch") return;
     if (e.button !== 0) return;
     const container = containerRef.current;
     if (!container) return;
     const crect = container.getBoundingClientRect();
-    const x = e.clientX - crect.left;
-    const y = e.clientY - crect.top;
     const onRow = (e.target as HTMLElement).closest("[data-key]") !== null;
-    dragStart.current = { x, y, started: false, onRow };
+    dragStart.current = {
+      x: e.clientX - crect.left,
+      y: e.clientY - crect.top,
+      started: false,
+      onRow,
+      pointerId: e.pointerId,
+      scroller: findScrollableAncestor(container),
+      rafId: null,
+      lastClientY: e.clientY,
+    };
+    try {
+      container.setPointerCapture(e.pointerId);
+    } catch {
+      // 捕获失败（如测试环境）不影响基本框选
+    }
+  };
 
-    const handleMove = (ev: MouseEvent) => {
-      const start = dragStart.current;
-      if (!start) return;
-      const cx = ev.clientX - crect.left;
-      const cy = ev.clientY - crect.top;
-      if (!start.started && Math.hypot(cx - start.x, cy - start.y) > 4) {
-        start.started = true;
-      }
-      if (!start.started) return;
-      const b: BoxRect = {
-        x1: Math.min(start.x, cx),
-        y1: Math.min(start.y, cy),
-        x2: Math.max(start.x, cx),
-        y2: Math.max(start.y, cy),
+  const handlePointerMove = (e: React.PointerEvent) => {
+    const start = dragStart.current;
+    const container = containerRef.current;
+    if (!start || !container || e.pointerId !== start.pointerId) return;
+    start.lastClientY = e.clientY;
+
+    // 滚动容器可能在拖动中被滚动（含下面的边缘自动滚动），
+    // 坐标必须实时换算，不能缓存 pointerdown 时的容器矩形
+    const crect = container.getBoundingClientRect();
+    const cx = e.clientX - crect.left;
+    const cy = e.clientY - crect.top;
+    if (!start.started && Math.hypot(cx - start.x, cy - start.y) > 4) {
+      start.started = true;
+    }
+    if (!start.started) return;
+    const b: BoxRect = {
+      x1: Math.min(start.x, cx),
+      y1: Math.min(start.y, cy),
+      x2: Math.max(start.x, cx),
+      y2: Math.max(start.y, cy),
+    };
+    boxRef.current = b;
+    setBox(b);
+    setBoxKeys(computeBoxKeys(b));
+
+    // 边缘自动滚动：进入边缘区后启动 rAF 循环，离开后自动停止
+    if (!start.scroller) return;
+    if (start.rafId === null && edgeScrollDelta(start.scroller, e.clientY) !== 0) {
+      const step = () => {
+        const s = dragStart.current;
+        if (!s || !s.scroller) return;
+        const delta = edgeScrollDelta(s.scroller, s.lastClientY);
+        if (delta === 0) {
+          s.rafId = null;
+          return;
+        }
+        s.scroller.scrollTop += delta;
+        // 内容随滚动移动：用最新矩形重新命中，选框下的行高亮实时更新
+        if (boxRef.current && containerRef.current)
+          setBoxKeys(computeBoxKeys(boxRef.current));
+        s.rafId = requestAnimationFrame(step);
       };
-      boxRef.current = b;
-      setBox(b);
-      setBoxKeys(computeBoxKeys(b));
-    };
+      start.rafId = requestAnimationFrame(step);
+    }
+  };
 
-    const handleUp = () => {
-      document.removeEventListener("mousemove", handleMove);
-      document.removeEventListener("mouseup", handleUp);
-      const start = dragStart.current;
-      const lastBox = boxRef.current;
-      dragStart.current = null;
-      boxRef.current = null;
-      setBox(null);
-      setBoxKeys([]);
-      if (start?.started) {
-        // 吞掉拖拽结束后的残余 click
-        suppressClickRef.current = true;
-        setTimeout(() => {
-          suppressClickRef.current = false;
-        }, 0);
-        if (lastBox) onSelectMany(computeBoxKeys(lastBox));
-      } else if (start && !start.onRow) {
-        // 空白处点击：清空选择（资源管理器风格）
-        onSelectMany([]);
-      }
-    };
+  const handlePointerUp = (e: React.PointerEvent) => {
+    const start = dragStart.current;
+    if (!start || e.pointerId !== start.pointerId) return;
+    const lastBox = boxRef.current;
+    stopDrag();
+    if (start.started) {
+      // 吞掉拖拽结束后的残余 click
+      suppressClickRef.current = true;
+      setTimeout(() => {
+        suppressClickRef.current = false;
+      }, 0);
+      if (lastBox) onSelectMany(computeBoxKeys(lastBox));
+    } else if (!start.onRow) {
+      // 空白处点击：清空选择（资源管理器风格）
+      onSelectMany([]);
+    }
+  };
 
-    document.addEventListener("mousemove", handleMove);
-    document.addEventListener("mouseup", handleUp);
+  // 浏览器接管手势（如触屏滚动取消）时清理状态，不做选择
+  const handlePointerCancel = (e: React.PointerEvent) => {
+    const start = dragStart.current;
+    if (!start || e.pointerId !== start.pointerId) return;
+    stopDrag();
   };
 
   const rowProps = (file: FileItem) => ({
@@ -284,19 +390,24 @@ function FileGrid({
         minHeight: "100%",
         userSelect: box ? "none" : undefined,
       }}
-      onMouseDown={handleMouseDown}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerCancel}
+      // 兜底：阻止网格内任何原生拖拽启动（如缩略图），保证框选 pointermove 正常
+      onDragStart={(e) => e.preventDefault()}
     >
       {view === "list" ? (
         <List sx={{ paddingBottom: "48px" }}>
           {files.map((file) => (
-            <FileRow key={file.key} {...rowProps(file)} />
+            <MemoFileRow key={file.key} {...rowProps(file)} />
           ))}
         </List>
       ) : (
         <Grid container sx={{ paddingBottom: "48px" }}>
           {files.map((file) => (
             <Grid item key={file.key} xs={12} sm={6} md={4} lg={3} xl={2}>
-              <FileRow {...rowProps(file)} />
+              <MemoFileRow {...rowProps(file)} />
             </Grid>
           ))}
         </Grid>

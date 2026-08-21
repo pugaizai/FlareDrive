@@ -74,25 +74,26 @@ function MultiSelectToolbar({
             open={Boolean(anchorEl)}
             onClose={() => setAnchorEl(null)}
           >
+            {/* MUI Menu 不接受 Fragment 包裹的子元素（告警且键盘导航失效） */}
             {multiSelected.length === 1 && (
-              <React.Fragment>
-                <MenuItem
-                  onClick={() => {
-                    setAnchorEl(null);
-                    onRename();
-                  }}
-                >
-                  Rename
-                </MenuItem>
-                <MenuItem
-                  onClick={() => {
-                    setAnchorEl(null);
-                    onShare();
-                  }}
-                >
-                  Share
-                </MenuItem>
-              </React.Fragment>
+              <MenuItem
+                onClick={() => {
+                  setAnchorEl(null);
+                  onRename();
+                }}
+              >
+                Rename
+              </MenuItem>
+            )}
+            {multiSelected.length === 1 && (
+              <MenuItem
+                onClick={() => {
+                  setAnchorEl(null);
+                  onShare();
+                }}
+              >
+                Share
+              </MenuItem>
             )}
           </Menu>
         )}

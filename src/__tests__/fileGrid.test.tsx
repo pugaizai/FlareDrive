@@ -112,12 +112,33 @@ it("box-selects files by dragging", () => {
   const container = screen.getByTestId("file-grid");
   mockRects(container);
 
-  fireEvent.mouseDown(container, { clientX: 0, clientY: 0, button: 0 });
-  fireEvent.mouseMove(document, { clientX: 250, clientY: 60 });
-  fireEvent.mouseUp(document, { clientX: 250, clientY: 60 });
+  fireEvent.pointerDown(container, { clientX: 0, clientY: 0, button: 0 });
+  fireEvent.pointerMove(container, { clientX: 250, clientY: 60 });
+  fireEvent.pointerUp(container, { clientX: 250, clientY: 60 });
 
   // 三行分别位于 x=0/100/200，宽 80，全部与 0..250 的框相交
   expect(onSelectMany).toHaveBeenCalledWith(["a.txt", "b.txt", "c.txt"]);
+});
+
+it("clears the selection when clicking empty space (no drag)", () => {
+  const onSelectMany = jest.fn();
+  render(
+    <FileGrid
+      files={[item("a.txt"), item("b.txt")]}
+      onCwdChange={jest.fn()}
+      multiSelected={null}
+      onMultiSelect={jest.fn()}
+      view="grid"
+      onSelectMany={onSelectMany}
+    />
+  );
+  const container = screen.getByTestId("file-grid");
+
+  // 点击空白处（target 不是行）且无拖拽 → 清空选择
+  fireEvent.pointerDown(container, { clientX: 0, clientY: 0, button: 0 });
+  fireEvent.pointerUp(container, { clientX: 0, clientY: 0 });
+
+  expect(onSelectMany).toHaveBeenCalledWith([]);
 });
 
 it("does not open a file when box-dragging over a row", () => {
@@ -153,10 +174,57 @@ it("does not open a file when box-dragging over a row", () => {
   // eslint-disable-next-line testing-library/no-node-access
   const row = container.querySelector('[data-key="a.txt"]') as HTMLElement;
 
-  fireEvent.mouseDown(row, { clientX: 0, clientY: 0, button: 0 });
-  fireEvent.mouseMove(document, { clientX: 120, clientY: 40 });
-  fireEvent.mouseUp(document, { clientX: 120, clientY: 40 });
+  fireEvent.pointerDown(row, { clientX: 0, clientY: 0, button: 0 });
+  fireEvent.pointerMove(container, { clientX: 120, clientY: 40 });
+  fireEvent.pointerUp(container, { clientX: 120, clientY: 40 });
 
   expect(onSelectMany).toHaveBeenCalled();
   expect(webdavFetch).not.toHaveBeenCalled(); // 框选拖拽不应触发文件打开
+});
+
+it("disables native image dragging on thumbnails so box selection is not hijacked", async () => {
+  (webdavFetch as jest.Mock).mockResolvedValue({
+    ok: true,
+    blob: async () => new Blob(["img"]),
+  });
+  Object.defineProperty(URL, "createObjectURL", {
+    writable: true,
+    configurable: true,
+    value: jest.fn(() => "blob:fake"),
+  });
+  Object.defineProperty(URL, "revokeObjectURL", {
+    writable: true,
+    configurable: true,
+    value: jest.fn(),
+  });
+
+  render(
+    <FileGrid
+      files={[
+        {
+          key: "pic.jpg",
+          size: 10,
+          uploaded: "Wed, 20 Jun 2024 12:00:00 GMT",
+          httpMetadata: { contentType: "image/jpeg" },
+          customMetadata: { thumbnail: "abc123" },
+        },
+      ]}
+      onCwdChange={jest.fn()}
+      multiSelected={null}
+      onMultiSelect={jest.fn()}
+      view="grid"
+      onSelectMany={jest.fn()}
+    />
+  );
+
+  // 缩略图通过带认证的 fetch 异步加载，等它渲染为 <img>
+  const img = await screen.findByAltText("pic.jpg");
+  expect(img).toHaveAttribute("draggable", "false");
+});
+
+it("blocks native drag start inside the file grid", () => {
+  render(<FileGrid {...baseProps} view="grid" />);
+  const container = screen.getByTestId("file-grid");
+  // fireEvent 返回 false 表示默认行为已被 preventDefault 阻止
+  expect(fireEvent.dragStart(container)).toBe(false);
 });

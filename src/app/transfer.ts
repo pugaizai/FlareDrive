@@ -112,6 +112,16 @@ export async function blobDigest(blob: Blob) {
 
 export const SIZE_LIMIT = 100 * 1000 * 1000; // 100MB
 
+// 服务端分批操作（目录删除/复制）返回 503 + Retry-After 时的客户端重试参数
+const MAX_COPY_RETRIES = 30; // 每次调用约复制 15 个子对象 → 最多约 450 个
+const MAX_DELETE_RETRIES = 50; // 每次调用删除 40 个 → 最多约 2000 个后代
+const DEFAULT_RETRY_WAIT_MS = 5000;
+const MAX_RETRY_WAIT_SECONDS = 10; // 等待上限，防止服务端给过大的 Retry-After
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function xhrFetch(
   url: RequestInfo | URL,
   requestInit: RequestInit & {
@@ -256,13 +266,32 @@ export async function copyPaste(
     `${WEBDAV_ENDPOINT}${encodeKey(target)}`,
     window.location.href
   );
-  const response = await webdavFetch(uploadUrl, {
-    method: move ? "MOVE" : "COPY",
-    headers: {
-      Destination: destinationUrl.href,
-      ...(dontOverwrite ? { Overwrite: "F" } : {}),
-    },
-  });
+  const doRequest = () =>
+    webdavFetch(uploadUrl, {
+      method: move ? "MOVE" : "COPY",
+      headers: {
+        Destination: destinationUrl.href,
+        ...(dontOverwrite ? { Overwrite: "F" } : {}),
+      },
+    });
+
+  // 目录复制是分批的（免费套餐子请求预算）：服务端返回 503 + Retry-After，
+  // COPY 需重试直至完成（已复制的目标会被跳过，幂等）。MOVE 不自动重试：
+  // 服务端自身会重试删除源，且带 Overwrite: F 时重试会因目标已存在而 412。
+  let response = await doRequest();
+  if (!move) {
+    let attempts = 0;
+    while (response.status === 503 && attempts < MAX_COPY_RETRIES) {
+      const retryAfter = Number(response.headers?.get?.("retry-after"));
+      const wait =
+        Number.isFinite(retryAfter) && retryAfter > 0
+          ? Math.min(retryAfter, MAX_RETRY_WAIT_SECONDS) * 1000
+          : DEFAULT_RETRY_WAIT_MS;
+      await sleep(wait);
+      response = await doRequest();
+      attempts++;
+    }
+  }
   if (!response.ok) {
     const error = new Error(
       `${move ? "Move" : "Copy"} failed with status ${response.status}`
@@ -270,6 +299,49 @@ export async function copyPaste(
     error.status = response.status;
     throw error;
   }
+}
+
+/** 删除一个或多个文件/目录。目录删除是分批的：服务端每次调用最多删 40 个
+ *  对象，超出返回 503 + Retry-After（删除幂等，重复调用安全），这里循环重试
+ *  直至完成。非 503 的失败会收集并在最后抛出，不影响其余条目的删除。 */
+export async function deletePaths(paths: string[]) {
+  const errors: Error[] = [];
+  for (const path of paths) {
+    try {
+      let attempts = 0;
+      for (;;) {
+        const response = await webdavFetch(`/webdav/${encodeKey(path)}`, {
+          method: "DELETE",
+        });
+        if (response.status === 503) {
+          if (++attempts >= MAX_DELETE_RETRIES) {
+            errors.push(
+              new Error(
+                `Delete timed out after ${attempts} retries: ${path}`
+              )
+            );
+            break;
+          }
+          const retryAfter = Number(response.headers?.get?.("retry-after"));
+          const wait =
+            Number.isFinite(retryAfter) && retryAfter > 0
+              ? Math.min(retryAfter, MAX_RETRY_WAIT_SECONDS) * 1000
+              : DEFAULT_RETRY_WAIT_MS;
+          await sleep(wait);
+          continue;
+        }
+        if (!response.ok) {
+          errors.push(
+            new Error(`Delete failed: ${path} (${response.status})`)
+          );
+        }
+        break;
+      }
+    } catch (error) {
+      errors.push(error as Error);
+    }
+  }
+  if (errors.length) throw errors[0];
 }
 
 /** 创建目录（纯 API，不做任何原生弹窗；名称校验失败时抛错） */

@@ -86,3 +86,25 @@ if (typeof globalThis.TextEncoder === "undefined") {
 if (typeof (globalThis as { crypto?: Crypto }).crypto?.subtle === "undefined") {
   globalThis.crypto = require("crypto").webcrypto;
 }
+
+// jest 27 内置的 jsdom 不支持 PointerEvent；React 依据 window.PointerEvent 是否
+// 存在来决定是否挂载 pointer 事件监听，没有它 onPointerDown 等永远不会触发。
+// 这里给一个基于 MouseEvent 的最小实现，仅满足本项目的指针事件用法。
+if (typeof window.PointerEvent === "undefined") {
+  class PointerEventShim extends MouseEvent {
+    pointerId: number;
+    pointerType: string;
+    isPrimary: boolean;
+    constructor(type: string, init: PointerEventInit = {}) {
+      super(type, init as MouseEventInit);
+      this.pointerId = init.pointerId ?? 0;
+      this.pointerType = init.pointerType ?? "mouse";
+      this.isPrimary = init.isPrimary ?? true;
+    }
+  }
+  Object.defineProperty(window, "PointerEvent", {
+    writable: true,
+    configurable: true,
+    value: PointerEventShim,
+  });
+}

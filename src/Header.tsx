@@ -5,7 +5,7 @@ import {
   MenuItem,
   Toolbar,
 } from "@mui/material";
-import { useState } from "react";
+import React, { useState } from "react";
 import {
   ArrowBack as ArrowBackIcon,
   Check as CheckIcon,
@@ -46,6 +46,49 @@ function Header({
       ? (value: string) => onSortChange(value as SortOption)
       : (value: string) => onViewChange(value as ViewOption);
 
+  // MUI Menu 不接受 Fragment/div 包裹的子元素（键盘导航失效且告警），
+  // 用数组直接渲染 MenuItem
+  const menuItems: React.ReactNode[] =
+    submenu === null
+      ? [
+          <MenuItem key="view" onClick={() => setSubmenu("view")}>
+            View as
+          </MenuItem>,
+          <MenuItem key="sort" onClick={() => setSubmenu("sort")}>
+            Sort by
+          </MenuItem>,
+          <MenuItem
+            key="progress"
+            onClick={() => {
+              close();
+              setShowProgressDialog(true);
+            }}
+          >
+            Progress
+          </MenuItem>,
+        ]
+      : [
+          <MenuItem key="back" onClick={() => setSubmenu(null)}>
+            <ArrowBackIcon fontSize="small" sx={{ mr: 1 }} />
+            Back
+          </MenuItem>,
+          ...submenuOptions.map((option) => (
+            <MenuItem
+              key={option.value}
+              selected={currentValue === option.value}
+              onClick={() => {
+                onSelect(option.value);
+                close();
+              }}
+            >
+              {option.label}
+              {currentValue === option.value && (
+                <CheckIcon fontSize="small" sx={{ ml: 1 }} />
+              )}
+            </MenuItem>
+          )),
+        ];
+
   return (
     <Toolbar disableGutters sx={{ padding: 1 }}>
       <InputBase
@@ -72,42 +115,7 @@ function Header({
         <MoreHorizIcon />
       </IconButton>
       <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={close}>
-        {submenu === null ? (
-          <div>
-            <MenuItem onClick={() => setSubmenu("view")}>View as</MenuItem>
-            <MenuItem onClick={() => setSubmenu("sort")}>Sort by</MenuItem>
-            <MenuItem
-              onClick={() => {
-                close();
-                setShowProgressDialog(true);
-              }}
-            >
-              Progress
-            </MenuItem>
-          </div>
-        ) : (
-          <div>
-            <MenuItem onClick={() => setSubmenu(null)}>
-              <ArrowBackIcon fontSize="small" sx={{ mr: 1 }} />
-              Back
-            </MenuItem>
-            {submenuOptions.map((option) => (
-              <MenuItem
-                key={option.value}
-                selected={currentValue === option.value}
-                onClick={() => {
-                  onSelect(option.value);
-                  close();
-                }}
-              >
-                {option.label}
-                {currentValue === option.value && (
-                  <CheckIcon fontSize="small" sx={{ ml: 1 }} />
-                )}
-              </MenuItem>
-            ))}
-          </div>
-        )}
+        {menuItems}
       </Menu>
     </Toolbar>
   );

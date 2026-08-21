@@ -22,7 +22,7 @@ import {
   ensureDirectories,
   relativeBasedir,
 } from "./app/folderUpload";
-import { copyPaste, fetchPath } from "./app/transfer";
+import { copyPaste, deletePaths, fetchPath } from "./app/transfer";
 import { SortOption, sortFiles } from "./app/sort";
 import { useTransferQueue, useUploadEnqueue } from "./app/transferQueue";
 import { ViewOption } from "./app/view";
@@ -338,9 +338,15 @@ function Main({
             .join("\n");
           const confirmMessage = "Delete the following file(s) permanently?";
           if (!window.confirm(`${confirmMessage}\n${filenames}`)) return;
-          for (const key of multiSelected)
-            await webdavFetch(`/webdav/${encodeKey(key)}`, { method: "DELETE" });
-          fetchFiles();
+          try {
+            // 目录删除是分批的：服务端 503 + Retry-After 时内部自动重试直至完成
+            await deletePaths(multiSelected);
+          } catch (error) {
+            onError(error as Error);
+          } finally {
+            // 部分删除成功后也要刷新，避免残留对象不显示
+            fetchFiles();
+          }
         }}
         onShare={async () => {
           if (multiSelected?.length !== 1) return;
