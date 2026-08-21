@@ -89,11 +89,18 @@ export const onRequest: PagesFunction<{
     if (!env.WEBDAV_USERNAME || !env.WEBDAV_PASSWORD)
       return new Response("WebDAV protocol is not enabled", { status: 403 });
 
+    // 网页端请求（带 X-FlareDrive-Web 标记）的 401 不下发 WWW-Authenticate，
+    // 避免浏览器对 fetch 弹原生登录框；WebDAV 客户端仍收到质询以弹出账号输入。
+    const isWebApp = request.headers.get("X-FlareDrive-Web") === "1";
+    const challengeHeaders: Record<string, string> = isWebApp
+      ? {}
+      : { "WWW-Authenticate": `Basic realm="WebDAV"` };
+
     const auth = request.headers.get("Authorization");
     if (!auth) {
       return new Response("Unauthorized", {
         status: 401,
-        headers: { "WWW-Authenticate": `Basic realm="WebDAV"` },
+        headers: challengeHeaders,
       });
     }
     // UTF-8 安全的 Base64：与前端 createAuthHeaders 保持一致，
@@ -102,7 +109,10 @@ export const onRequest: PagesFunction<{
       `${env.WEBDAV_USERNAME}:${env.WEBDAV_PASSWORD}`
     )}`;
     if (auth !== expectedAuth)
-      return new Response("Unauthorized", { status: 401 });
+      return new Response("Unauthorized", {
+        status: 401,
+        headers: challengeHeaders,
+      });
   }
 
   // 生成短时效签名分享链接（需要已认证）

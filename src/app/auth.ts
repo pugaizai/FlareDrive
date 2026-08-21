@@ -83,6 +83,9 @@ export async function webdavFetch(input: RequestInfo | URL, init?: RequestInit) 
   const headers = new Headers(init?.headers);
   for (const [key, value] of Object.entries(createAuthHeaders()))
     headers.set(key, value);
+  // 标记为网页端请求：服务端对这类 401 不下发 WWW-Authenticate，
+  // 避免浏览器（尤其 Firefox）对 fetch 401 弹原生登录框。
+  headers.set("X-FlareDrive-Web", "1");
   const response = await fetch(input, { ...init, headers });
   if (response.status === 401) notifyUnauthorized();
   return response;

@@ -128,6 +128,8 @@ function xhrFetch(
     const headers = new Headers(requestInit.headers);
     for (const [key, value] of Object.entries(createAuthHeaders()))
       headers.set(key, value);
+    // 网页端标记：避免服务端对 401 下发 WWW-Authenticate 触发原生登录框
+    headers.set("X-FlareDrive-Web", "1");
     headers.forEach((value, key) => xhr.setRequestHeader(key, value));
     xhr.onload = () => {
       const headers = xhr

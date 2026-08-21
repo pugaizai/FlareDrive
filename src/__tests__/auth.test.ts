@@ -58,6 +58,23 @@ it("returns 401 with WWW-Authenticate when no credentials are provided", async (
   );
 });
 
+it("does not challenge web-app requests (no native browser prompt)", async () => {
+  // 网页端请求带 X-FlareDrive-Web 标记：401 不下发 WWW-Authenticate
+  const res = await onRequestUntyped(
+    context({
+      request: {
+        url: "https://example.com/webdav/",
+        method: "PROPFIND",
+        headers: {
+          get: (name: string) => (name === "X-FlareDrive-Web" ? "1" : null),
+        },
+      },
+    })
+  );
+  expect(res.status).toBe(401);
+  expect(res.headers.get("WWW-Authenticate")).toBeNull();
+});
+
 it("rejects wrong credentials", async () => {
   const res = await onRequestUntyped(
     context({
