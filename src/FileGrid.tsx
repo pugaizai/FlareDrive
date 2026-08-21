@@ -293,11 +293,9 @@ function FileGrid({
       rafId: null,
       lastClientY: e.clientY,
     };
-    try {
-      container.setPointerCapture(e.pointerId);
-    } catch {
-      // 捕获失败（如测试环境）不影响基本框选
-    }
+    // 不能在此处 setPointerCapture：捕获会改变后续 click 事件的目标（落到容器
+    // 而非被点击的行），导致普通点击打不开文件夹/文件。捕获延迟到真正进入
+    // 拖拽（超过 4px 阈值）之后，见 handlePointerMove。
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
@@ -313,6 +311,13 @@ function FileGrid({
     const cy = e.clientY - crect.top;
     if (!start.started && Math.hypot(cx - start.x, cy - start.y) > 4) {
       start.started = true;
+      // 进入拖拽后才捕获指针：拖出窗口/容器仍能收到 move/up（不泄漏监听）；
+      // 普通点击不捕获，click 仍落在原目标行上，文件夹导航/文件打开不受影响
+      try {
+        container.setPointerCapture(start.pointerId);
+      } catch {
+        // 捕获失败（如测试环境）不影响基本框选
+      }
     }
     if (!start.started) return;
     const b: BoxRect = {

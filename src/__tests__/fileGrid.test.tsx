@@ -120,6 +120,30 @@ it("box-selects files by dragging", () => {
   expect(onSelectMany).toHaveBeenCalledWith(["a.txt", "b.txt", "c.txt"]);
 });
 
+it("navigates into a folder on a plain click (no drag)", () => {
+  const onCwdChange = jest.fn();
+  render(
+    <FileGrid
+      files={[item("sub", true)]}
+      onCwdChange={onCwdChange}
+      multiSelected={null}
+      onMultiSelect={jest.fn()}
+      view="grid"
+      onSelectMany={jest.fn()}
+    />
+  );
+  const container = screen.getByTestId("file-grid");
+  // eslint-disable-next-line testing-library/no-node-access
+  const row = container.querySelector('[data-key="sub"]') as HTMLElement;
+
+  // 无拖拽的点击：pointer 序列后浏览器派发 click，应正常进入目录
+  fireEvent.pointerDown(row, { clientX: 0, clientY: 0, button: 0 });
+  fireEvent.pointerUp(row, { clientX: 0, clientY: 0, button: 0 });
+  fireEvent.click(row);
+
+  expect(onCwdChange).toHaveBeenCalledWith("sub/");
+});
+
 it("clears the selection when clicking empty space (no drag)", () => {
   const onSelectMany = jest.fn();
   render(
