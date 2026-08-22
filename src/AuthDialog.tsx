@@ -7,6 +7,7 @@ import {
   TextField,
 } from "@mui/material";
 import { useState } from "react";
+import { useI18n } from "./i18n";
 
 function AuthDialog({
   open,
@@ -17,6 +18,7 @@ function AuthDialog({
   onClose: () => void;
   onSave: (username: string, password: string) => void;
 }) {
+  const { t } = useI18n();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
 
@@ -29,10 +31,10 @@ function AuthDialog({
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="xs">
-      <DialogTitle>WebDAV Authentication</DialogTitle>
+      <DialogTitle>{t("auth.title")}</DialogTitle>
       <DialogContent>
         <TextField
-          label="Username"
+          label={t("auth.username")}
           value={username}
           onChange={(e) => setUsername(e.target.value)}
           fullWidth
@@ -40,7 +42,7 @@ function AuthDialog({
           autoFocus
         />
         <TextField
-          label="Password"
+          label={t("auth.password")}
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
@@ -52,9 +54,9 @@ function AuthDialog({
         />
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose}>Cancel</Button>
+        <Button onClick={onClose}>{t("common.cancel")}</Button>
         <Button variant="contained" onClick={submit} disabled={!username}>
-          Save
+          {t("common.save")}
         </Button>
       </DialogActions>
     </Dialog>

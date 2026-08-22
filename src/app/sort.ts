@@ -1,4 +1,5 @@
 // 文件列表排序：目录始终置顶，组内按所选条件排序
+import type { TranslationKey } from "../i18n/translations";
 import { FileItem, isDirectory } from "../FileGrid";
 
 export type SortOption =
@@ -9,13 +10,13 @@ export type SortOption =
   | "modified-asc"
   | "modified-desc";
 
-export const SORT_OPTIONS: { value: SortOption; label: string }[] = [
-  { value: "name-asc", label: "Name (A→Z)" },
-  { value: "name-desc", label: "Name (Z→A)" },
-  { value: "size-desc", label: "Size (largest first)" },
-  { value: "size-asc", label: "Size (smallest first)" },
-  { value: "modified-desc", label: "Modified (newest first)" },
-  { value: "modified-asc", label: "Modified (oldest first)" },
+export const SORT_OPTIONS: { value: SortOption; labelKey: TranslationKey }[] = [
+  { value: "name-asc", labelKey: "sort.nameAsc" },
+  { value: "name-desc", labelKey: "sort.nameDesc" },
+  { value: "size-desc", labelKey: "sort.sizeDesc" },
+  { value: "size-asc", labelKey: "sort.sizeAsc" },
+  { value: "modified-desc", labelKey: "sort.modifiedDesc" },
+  { value: "modified-asc", labelKey: "sort.modifiedAsc" },
 ];
 
 const dateOf = (file: FileItem) => new Date(file.uploaded).getTime();

@@ -1,6 +1,7 @@
 import pLimit from "p-limit";
 
 import { encodeKey, FileItem } from "../FileGrid";
+import { appError } from "./errors";
 import { webdavFetch, createAuthHeaders, notifyUnauthorized } from "./auth";
 import { TransferTask } from "./transferQueue";
 
@@ -12,9 +13,9 @@ export async function fetchPath(path: string) {
     headers: { Depth: "1" },
   });
 
-  if (!res.ok) throw new Error("Failed to fetch");
+  if (!res.ok) throw appError("fetchFailed", "Failed to fetch");
   if (!res.headers.get("Content-Type")?.includes("application/xml"))
-    throw new Error("Invalid response");
+    throw appError("invalidResponse", "Invalid response");
 
   const parser = new DOMParser();
   const text = await res.text();
@@ -28,7 +29,7 @@ export async function fetchPath(path: string) {
     )
     .map((response) => {
       const href = response.querySelector("href")?.textContent;
-      if (!href) throw new Error("Invalid response");
+      if (!href) throw appError("invalidResponse", "Invalid response");
       const contentType = response.querySelector("getcontenttype")?.textContent;
       const size = response.querySelector("getcontentlength")?.textContent;
       const lastModified =
@@ -293,10 +294,12 @@ export async function copyPaste(
     }
   }
   if (!response.ok) {
-    const error = new Error(
-      `${move ? "Move" : "Copy"} failed with status ${response.status}`
-    ) as Error & { status?: number };
-    error.status = response.status;
+    const error = appError(
+      "transferFailed",
+      `${move ? "Move" : "Copy"} failed with status ${response.status}`,
+      { action: move ? "move" : "copy", status: response.status },
+      response.status
+    );
     throw error;
   }
 }
@@ -316,8 +319,10 @@ export async function deletePaths(paths: string[]) {
         if (response.status === 503) {
           if (++attempts >= MAX_DELETE_RETRIES) {
             errors.push(
-              new Error(
-                `Delete timed out after ${attempts} retries: ${path}`
+              appError(
+                "deleteTimedOut",
+                `Delete timed out after ${attempts} retries: ${path}`,
+                { attempts, path }
               )
             );
             break;
@@ -332,7 +337,11 @@ export async function deletePaths(paths: string[]) {
         }
         if (!response.ok) {
           errors.push(
-            new Error(`Delete failed: ${path} (${response.status})`)
+            appError(
+              "deleteFailed",
+              `Delete failed: ${path} (${response.status})`,
+              { path, status: response.status }
+            )
           );
         }
         break;
@@ -347,12 +356,16 @@ export async function deletePaths(paths: string[]) {
 /** 创建目录（纯 API，不做任何原生弹窗；名称校验失败时抛错） */
 export async function createFolderAt(cwd: string, folderName: string) {
   if (!folderName || folderName.includes("/"))
-    throw new Error("Invalid folder name");
+    throw appError("invalidFolderName", "Invalid folder name");
   const folderKey = `${cwd}${folderName}`;
   const uploadUrl = `${WEBDAV_ENDPOINT}${encodeKey(folderKey)}`;
   const response = await webdavFetch(uploadUrl, { method: "MKCOL" });
   if (!response.ok)
-    throw new Error(`Create folder failed with status ${response.status}`);
+    throw appError(
+      "createFolderFailed",
+      `Create folder failed with status ${response.status}`,
+      { status: response.status }
+    );
 }
 
 export async function processTransferTask({
@@ -363,7 +376,8 @@ export async function processTransferTask({
   onTaskProgress?: (event: { loaded: number; total: number }) => void;
 }) {
   const { remoteKey, file } = task;
-  if (task.type !== "upload" || !file) throw new Error("Invalid task");
+  if (task.type !== "upload" || !file)
+    throw appError("invalidTask", "Invalid task");
   let thumbnailDigest = null;
 
   if (

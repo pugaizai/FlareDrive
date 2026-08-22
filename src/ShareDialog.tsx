@@ -13,6 +13,7 @@ import {
   Share as ShareIcon,
 } from "@mui/icons-material";
 import { useEffect, useState } from "react";
+import { useI18n } from "./i18n";
 
 function ShareDialog({
   open,
@@ -23,6 +24,7 @@ function ShareDialog({
   url: string;
   onClose: () => void;
 }) {
+  const { t } = useI18n();
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
@@ -40,7 +42,7 @@ function ShareDialog({
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
-      <DialogTitle>Share link</DialogTitle>
+      <DialogTitle>{t("share.title")}</DialogTitle>
       <DialogContent>
         <TextField
           value={url}
@@ -52,7 +54,7 @@ function ShareDialog({
       </DialogContent>
       <DialogActions>
         <Button onClick={copy} startIcon={copied ? <CheckIcon /> : <ContentCopyIcon />}>
-          {copied ? "Copied" : "Copy"}
+          {copied ? t("share.copied") : t("share.copy")}
         </Button>
         {typeof navigator.share === "function" && (
           <Button
@@ -61,10 +63,10 @@ function ShareDialog({
             }}
             startIcon={<ShareIcon />}
           >
-            Share
+            {t("share.share")}
           </Button>
         )}
-        <Button onClick={onClose}>Close</Button>
+        <Button onClick={onClose}>{t("common.close")}</Button>
       </DialogActions>
     </Dialog>
   );

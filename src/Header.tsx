@@ -13,6 +13,9 @@ import {
 } from "@mui/icons-material";
 import { SORT_OPTIONS, SortOption } from "./app/sort";
 import { VIEW_OPTIONS, ViewOption } from "./app/view";
+import { LOCALES, useI18n } from "./i18n";
+
+type Submenu = "sort" | "view" | "language" | null;
 
 function Header({
   search,
@@ -31,16 +34,19 @@ function Header({
   view: ViewOption;
   onViewChange: (view: ViewOption) => void;
 }) {
+  const { t, locale, setLocale } = useI18n();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
-  const [submenu, setSubmenu] = useState<"sort" | "view" | null>(null);
+  const [submenu, setSubmenu] = useState<Submenu>(null);
 
   const close = () => {
     setAnchorEl(null);
     setSubmenu(null);
   };
 
-  const submenuOptions = submenu === "sort" ? SORT_OPTIONS : VIEW_OPTIONS;
-  const currentValue: string = submenu === "sort" ? sort : view;
+  const submenuOptions =
+    submenu === "sort" ? SORT_OPTIONS : VIEW_OPTIONS;
+  const currentValue: string =
+    submenu === "sort" ? sort : submenu === "view" ? view : "";
   const onSelect =
     submenu === "sort"
       ? (value: string) => onSortChange(value as SortOption)
@@ -52,10 +58,13 @@ function Header({
     submenu === null
       ? [
           <MenuItem key="view" onClick={() => setSubmenu("view")}>
-            View as
+            {t("header.viewAs")}
           </MenuItem>,
           <MenuItem key="sort" onClick={() => setSubmenu("sort")}>
-            Sort by
+            {t("header.sortBy")}
+          </MenuItem>,
+          <MenuItem key="language" onClick={() => setSubmenu("language")}>
+            {t("header.language")}
           </MenuItem>,
           <MenuItem
             key="progress"
@@ -64,29 +73,45 @@ function Header({
               setShowProgressDialog(true);
             }}
           >
-            Progress
+            {t("header.progress")}
           </MenuItem>,
         ]
       : [
           <MenuItem key="back" onClick={() => setSubmenu(null)}>
             <ArrowBackIcon fontSize="small" sx={{ mr: 1 }} />
-            Back
+            {t("common.back")}
           </MenuItem>,
-          ...submenuOptions.map((option) => (
-            <MenuItem
-              key={option.value}
-              selected={currentValue === option.value}
-              onClick={() => {
-                onSelect(option.value);
-                close();
-              }}
-            >
-              {option.label}
-              {currentValue === option.value && (
-                <CheckIcon fontSize="small" sx={{ ml: 1 }} />
-              )}
-            </MenuItem>
-          )),
+          ...(submenu === "language"
+            ? LOCALES.map((option) => (
+                <MenuItem
+                  key={option.value}
+                  selected={locale === option.value}
+                  onClick={() => {
+                    setLocale(option.value);
+                    close();
+                  }}
+                >
+                  {option.label}
+                  {locale === option.value && (
+                    <CheckIcon fontSize="small" sx={{ ml: 1 }} />
+                  )}
+                </MenuItem>
+              ))
+            : submenuOptions.map((option) => (
+                <MenuItem
+                  key={option.value}
+                  selected={currentValue === option.value}
+                  onClick={() => {
+                    onSelect(option.value);
+                    close();
+                  }}
+                >
+                  {t(option.labelKey)}
+                  {currentValue === option.value && (
+                    <CheckIcon fontSize="small" sx={{ ml: 1 }} />
+                  )}
+                </MenuItem>
+              ))),
         ];
 
   return (
@@ -94,7 +119,7 @@ function Header({
       <InputBase
         size="small"
         fullWidth
-        placeholder="Search…"
+        placeholder={t("header.searchPlaceholder")}
         value={search}
         onChange={(e) => onSearchChange(e.target.value)}
         sx={{
@@ -104,7 +129,7 @@ function Header({
         }}
       />
       <IconButton
-        aria-label="More"
+        aria-label={t("common.more")}
         color="inherit"
         sx={{ marginLeft: 0.5 }}
         onClick={(e) => {

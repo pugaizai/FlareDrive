@@ -27,6 +27,7 @@ import { copyPaste, deletePaths, fetchPath } from "./app/transfer";
 import { SortOption, sortFiles } from "./app/sort";
 import { useTransferQueue, useUploadEnqueue } from "./app/transferQueue";
 import { ViewOption } from "./app/view";
+import { useI18n } from "./i18n";
 
 // Centered helper
 function Centered({ children }: { children: React.ReactNode }) {
@@ -145,6 +146,7 @@ function Main({
 
   const transferQueue = useTransferQueue();
   const uploadEnqueue = useUploadEnqueue();
+  const { t } = useI18n();
 
   const fetchFiles = useCallback(() => {
     fetchPath(cwd)
@@ -272,7 +274,7 @@ function Main({
             onCwdChange={(newCwd: string) => setCwd(newCwd)}
             multiSelected={multiSelected}
             onMultiSelect={handleMultiSelect}
-            emptyMessage={<Centered>No files or folders</Centered>}
+            emptyMessage={<Centered>{t("main.empty")}</Centered>}
             view={view}
             onSelectMany={(keys) =>
               setMultiSelected(keys.length ? keys : null)
@@ -295,7 +297,7 @@ function Main({
             }}
             onClick={() => setShowTextPadDrawer(true)}
           >
-            Open TextPad
+            {t("main.openTextPad")}
           </Button>
         </>
       )}
@@ -321,7 +323,7 @@ function Main({
           if (multiSelected?.length !== 1) return;
           const key = multiSelected[0];
           const res = await webdavFetch(`/webdav/${encodeKey(key)}`);
-          if (!res.ok) throw new Error("Download failed");
+          if (!res.ok) throw new Error(t("main.downloadFailed"));
           const blob = await res.blob();
           const url = URL.createObjectURL(blob);
           const a = document.createElement("a");
@@ -348,14 +350,12 @@ function Main({
             );
             if (res.status === 503) {
               onError(
-                new Error(
-                  "Share links are not enabled. Set WEBDAV_SHARE_SECRET in your deployment to enable them."
-                )
+                new Error(t("main.shareNotEnabled"))
               );
               return;
             }
             if (!res.ok)
-              throw new Error(`Share links are unavailable (${res.status})`);
+              throw new Error(t("main.shareUnavailable", { status: res.status }));
             const { url } = (await res.json()) as { url: string };
             setShareUrl(url);
           } catch (error) {
@@ -366,8 +366,8 @@ function Main({
 
       <PromptDialog
         open={renameKey !== null}
-        title="Rename"
-        label="New name"
+        title={t("main.renameTitle")}
+        label={t("main.newNameLabel")}
         initialValue={renameKey ? renameKey.split("/").pop() : ""}
         onSubmit={async (newName) => {
           const source = renameKey;
@@ -378,7 +378,7 @@ function Main({
             await copyPaste(source, cwd + newName, true, true);
           } catch (error) {
             if ((error as { status?: number })?.status === 412) {
-              onError(new Error(`"${newName}" already exists`));
+              onError(new Error(t("main.renameExists", { name: newName })));
             } else {
               onError(error as Error);
             }
@@ -397,12 +397,14 @@ function Main({
 
       <ConfirmDialog
         open={confirmDelete !== null}
-        title="Delete"
+        title={t("main.deleteTitle")}
         message={
           confirmDelete
-            ? `Delete the following file(s) permanently?\n\n${confirmDelete
-                .map((key) => key.replace(/\/$/, "").split("/").pop())
-                .join("\n")}`
+            ? t("main.deleteMessage", {
+                list: confirmDelete
+                  .map((key) => key.replace(/\/$/, "").split("/").pop())
+                  .join("\n"),
+              })
             : undefined
         }
         onClose={() => setConfirmDelete(null)}

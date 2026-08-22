@@ -15,6 +15,7 @@ import {
   relativeBasedir,
 } from "./app/folderUpload";
 import { useUploadEnqueue } from "./app/transferQueue";
+import { useI18n } from "./i18n";
 
 function IconCaptionButton({
   icon,
@@ -43,11 +44,12 @@ function IconCaptionButton({
 }
 
 export const UploadFab = forwardRef<HTMLButtonElement, { onClick: () => void }>(
-  function ({ onClick }, ref) {
+  function UploadFab({ onClick }, ref) {
+    const { t } = useI18n();
     return (
       <Fab
         ref={ref}
-        aria-label="Upload"
+        aria-label={t("upload.upload")}
         variant="circular"
         color="primary"
         size="large"
@@ -71,6 +73,7 @@ function UploadDrawer({
   cwd: string;
   onUpload: () => void;
 }) {
+  const { t } = useI18n();
   const uploadEnqueue = useUploadEnqueue();
   const [folderDialogOpen, setFolderDialogOpen] = useState(false);
 
@@ -155,35 +158,35 @@ function UploadDrawer({
           <Grid item xs={2.4}>
             <IconCaptionButton
               icon={<CameraIcon fontSize="large" />}
-              caption="Camera"
+              caption={t("upload.camera")}
               onClick={takePhoto}
             />
           </Grid>
           <Grid item xs={2.4}>
             <IconCaptionButton
               icon={<ImageIcon fontSize="large" />}
-              caption="Image/Video"
+              caption={t("upload.imageVideo")}
               onClick={uploadImage}
             />
           </Grid>
           <Grid item xs={2.4}>
             <IconCaptionButton
               icon={<UploadIcon fontSize="large" />}
-              caption="Upload"
+              caption={t("upload.upload")}
               onClick={uploadFile}
             />
           </Grid>
           <Grid item xs={2.4}>
             <IconCaptionButton
               icon={<FolderIcon fontSize="large" />}
-              caption="Upload Folder"
+              caption={t("upload.uploadFolder")}
               onClick={uploadFolder}
             />
           </Grid>
           <Grid item xs={2.4}>
             <IconCaptionButton
               icon={<CreateNewFolderIcon fontSize="large" />}
-              caption="Create Folder"
+              caption={t("upload.createFolder")}
               onClick={() => setFolderDialogOpen(true)}
             />
           </Grid>
@@ -191,8 +194,8 @@ function UploadDrawer({
       </Card>
       <PromptDialog
         open={folderDialogOpen}
-        title="Create Folder"
-        label="Folder name"
+        title={t("upload.createFolder")}
+        label={t("upload.folderName")}
         onSubmit={handleCreateFolder}
         onClose={() => setFolderDialogOpen(false)}
       />

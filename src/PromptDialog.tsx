@@ -8,6 +8,7 @@ import {
   TextField,
 } from "@mui/material";
 import { useEffect, useState } from "react";
+import { useI18n } from "./i18n";
 
 function PromptDialog({
   open,
@@ -24,6 +25,7 @@ function PromptDialog({
   onSubmit: (value: string) => void;
   onClose: () => void;
 }) {
+  const { t } = useI18n();
   const [value, setValue] = useState(initialValue ?? "");
 
   useEffect(() => {
@@ -53,9 +55,9 @@ function PromptDialog({
         />
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose}>Cancel</Button>
+        <Button onClick={onClose}>{t("common.cancel")}</Button>
         <Button variant="contained" onClick={submit} disabled={!value.trim()}>
-          OK
+          {t("common.ok")}
         </Button>
       </DialogActions>
     </Dialog>

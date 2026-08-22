@@ -16,6 +16,7 @@ import {
   CheckCircleOutline as CheckCircleOutlineIcon,
   ErrorOutline as ErrorOutlineIcon,
 } from "@mui/icons-material";
+import { useI18n } from "./i18n";
 
 function ProgressDialog({
   open,
@@ -24,17 +25,18 @@ function ProgressDialog({
   open: boolean;
   onClose: () => void;
 }) {
+  const { t } = useI18n();
   const transferQueue: TransferTask[] = useTransferQueue();
 
   const tasks = useMemo(() => Object.values(transferQueue), [transferQueue]);
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="xs">
-      <DialogTitle>Progress</DialogTitle>
+      <DialogTitle>{t("progress.title")}</DialogTitle>
       {tasks.length === 0 ? (
         <DialogContent>
           <Typography textAlign="center" color="text.secondary">
-            No tasks
+            {t("progress.noTasks")}
           </Typography>
         </DialogContent>
       ) : (

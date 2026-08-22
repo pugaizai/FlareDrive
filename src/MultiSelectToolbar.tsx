@@ -6,6 +6,7 @@ import {
   Download as DownloadIcon,
   MoreHoriz as MoreHorizIcon,
 } from "@mui/icons-material";
+import { useI18n } from "./i18n";
 
 function MultiSelectToolbar({
   multiSelected,
@@ -22,6 +23,7 @@ function MultiSelectToolbar({
   onDelete: () => void;
   onShare: () => void;
 }) {
+  const { t } = useI18n();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
 
   // 选择状态变化时关闭二级菜单，避免重命名/删除后再次选中时菜单残留弹开
@@ -59,7 +61,7 @@ function MultiSelectToolbar({
           <DeleteIcon />
         </IconButton>
         <IconButton
-          aria-label="More"
+          aria-label={t("common.more")}
           color="primary"
           disabled={
             multiSelected?.length !== 1 || multiSelected[0].endsWith("/")
@@ -82,7 +84,7 @@ function MultiSelectToolbar({
                   onRename();
                 }}
               >
-                Rename
+                {t("multiSelect.rename")}
               </MenuItem>
             )}
             {multiSelected.length === 1 && (
@@ -92,7 +94,7 @@ function MultiSelectToolbar({
                   onShare();
                 }}
               >
-                Share
+                {t("multiSelect.share")}
               </MenuItem>
             )}
           </Menu>

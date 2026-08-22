@@ -7,12 +7,13 @@ import {
   DialogContentText,
   DialogTitle,
 } from "@mui/material";
+import { useI18n } from "./i18n";
 
 function ConfirmDialog({
   open,
   title,
   message,
-  confirmLabel = "Delete",
+  confirmLabel,
   onConfirm,
   onClose,
 }: {
@@ -23,6 +24,9 @@ function ConfirmDialog({
   onConfirm: () => void;
   onClose: () => void;
 }) {
+  const { t } = useI18n();
+  const label = confirmLabel ?? t("confirm.delete");
+
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="xs">
       <DialogTitle>{title}</DialogTitle>
@@ -35,9 +39,9 @@ function ConfirmDialog({
         </DialogContentText>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose}>Cancel</Button>
+        <Button onClick={onClose}>{t("common.cancel")}</Button>
         <Button variant="contained" color="error" onClick={onConfirm}>
-          {confirmLabel}
+          {label}
         </Button>
       </DialogActions>
     </Dialog>
