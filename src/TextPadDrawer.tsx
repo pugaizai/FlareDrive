@@ -1,5 +1,5 @@
 // TextPadDrawer.tsx
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Box,
   Button,
@@ -26,13 +26,20 @@ const TextPadDrawer: React.FC<TextPadDrawerProps> = ({
 }) => {
   const [noteText, setNoteText] = useState("");
   const [noteName, setNoteName] = useState("note.txt");
+  // 文件名非法时的应用内错误提示（替代浏览器原生 window.alert）
+  const [nameError, setNameError] = useState<string | null>(null);
   const uploadEnqueue = useUploadEnqueue();
+
+  // 重新打开时清掉上次的错误
+  useEffect(() => {
+    if (open) setNameError(null);
+  }, [open]);
 
   const handleSaveNote = () => {
     const trimmedName = noteName.trim();
     // 与 createFolder 一致：不允许空文件名或包含路径分隔符
     if (!trimmedName || trimmedName.includes("/")) {
-      window.alert("Invalid file name");
+      setNameError("Invalid file name");
       return;
     }
     const fileBlob = new Blob([noteText], { type: "text/plain" });
@@ -42,6 +49,7 @@ const TextPadDrawer: React.FC<TextPadDrawerProps> = ({
     setOpen(false); // Close drawer
     setNoteText(""); // Reset
     setNoteName("note.txt");
+    setNameError(null);
   };
 
   return (
@@ -57,8 +65,13 @@ const TextPadDrawer: React.FC<TextPadDrawerProps> = ({
         <TextField
           label="File Name"
           value={noteName}
-          onChange={(e) => setNoteName(e.target.value)}
+          onChange={(e) => {
+            setNoteName(e.target.value);
+            if (nameError) setNameError(null);
+          }}
           fullWidth
+          error={Boolean(nameError)}
+          helperText={nameError ?? undefined}
           sx={{ mb: 2 }}
         />
 

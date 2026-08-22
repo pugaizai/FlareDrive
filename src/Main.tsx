@@ -11,6 +11,7 @@ import {
 import { Home as HomeIcon, NoteAdd as NoteAddIcon } from "@mui/icons-material";
 
 import FileGrid, { encodeKey, FileItem } from "./FileGrid";
+import ConfirmDialog from "./ConfirmDialog";
 import MultiSelectToolbar from "./MultiSelectToolbar";
 import PromptDialog from "./PromptDialog";
 import ShareDialog from "./ShareDialog";
@@ -139,6 +140,8 @@ function Main({
   const [lastUploadKey, setLastUploadKey] = useState<string | null>(null);
   const [renameKey, setRenameKey] = useState<string | null>(null);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
+  // 待确认删除的 key 列表（null = 对话框关闭）；确认后执行 deletePaths
+  const [confirmDelete, setConfirmDelete] = useState<string[] | null>(null);
 
   const transferQueue = useTransferQueue();
   const uploadEnqueue = useUploadEnqueue();
@@ -331,22 +334,10 @@ function Main({
           if (multiSelected?.length !== 1) return;
           setRenameKey(multiSelected[0]);
         }}
-        onDelete={async () => {
+        onDelete={() => {
           if (!multiSelected?.length) return;
-          const filenames = multiSelected
-            .map((key) => key.replace(/\/$/, "").split("/").pop())
-            .join("\n");
-          const confirmMessage = "Delete the following file(s) permanently?";
-          if (!window.confirm(`${confirmMessage}\n${filenames}`)) return;
-          try {
-            // 目录删除是分批的：服务端 503 + Retry-After 时内部自动重试直至完成
-            await deletePaths(multiSelected);
-          } catch (error) {
-            onError(error as Error);
-          } finally {
-            // 部分删除成功后也要刷新，避免残留对象不显示
-            fetchFiles();
-          }
+          // 打开应用内确认对话框（替代浏览器原生 window.confirm）
+          setConfirmDelete(multiSelected);
         }}
         onShare={async () => {
           if (multiSelected?.length !== 1) return;
@@ -402,6 +393,33 @@ function Main({
         open={shareUrl !== null}
         url={shareUrl ?? ""}
         onClose={() => setShareUrl(null)}
+      />
+
+      <ConfirmDialog
+        open={confirmDelete !== null}
+        title="Delete"
+        message={
+          confirmDelete
+            ? `Delete the following file(s) permanently?\n\n${confirmDelete
+                .map((key) => key.replace(/\/$/, "").split("/").pop())
+                .join("\n")}`
+            : undefined
+        }
+        onClose={() => setConfirmDelete(null)}
+        onConfirm={async () => {
+          const keys = confirmDelete;
+          setConfirmDelete(null);
+          if (!keys?.length) return;
+          try {
+            // 目录删除是分批的：服务端 503 + Retry-After 时内部自动重试直至完成
+            await deletePaths(keys);
+          } catch (error) {
+            onError(error as Error);
+          } finally {
+            // 部分删除成功后也要刷新，避免残留对象不显示
+            fetchFiles();
+          }
+        }}
       />
     </>
   );
