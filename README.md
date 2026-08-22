@@ -2,158 +2,51 @@
 
 [![CI](https://github.com/pugaizai/FlareDrive/actions/workflows/ci.yml/badge.svg)](https://github.com/pugaizai/FlareDrive/actions/workflows/ci.yml)
 
-基于 **Cloudflare R2 + Pages Functions** 的网盘：网页端 + 标准 WebDAV 端点，零服务器成本。
-免费套餐包含 10 GB 存储、每天 100,000 次请求调用。
-[更多定价信息](https://developers.cloudflare.com/r2/platform/pricing/)
+基于 **Cloudflare R2 + Pages Functions** 的零服务器网盘：网页端文件管理 + 标准 WebDAV 端点
+（[免费套餐](https://developers.cloudflare.com/r2/platform/pricing/) 10 GB 存储、每天 10 万次请求）。
 
-## 功能特性
+## 功能
 
-- **文件管理**：浏览（URL hash 路由、刷新不丢路径）、搜索、排序（名称/大小/时间）、网格/列表视图切换、新建/重命名（防覆盖）/复制/移动/删除（适配免费套餐分批）
-- **上传**：拖拽上传、文件夹上传（选择器 + 拖拽目录树）、图片/视频、TextPad 快速记事本、大文件分块上传（≥100MB，断点失败自动重试与清理）
-- **缩略图**：图片 / MP4 / PDF 自动生成，SHA-1 去重、长期缓存
-- **分享链接**：HMAC 签名、短时效（默认 24h）、接收方免账号下载/预览，无需开启公开读
-- **WebDAV 端点**：可用任意 WebDAV 客户端挂载
-- **多租户**：子域名隔离存储桶（`<driveid>.example.com` → 对应 R2 桶）
-- **工程化**：GitHub Actions CI（lint / 类型检查 / 测试带覆盖率 / 构建）、77 个单元与组件测试
+- **文件管理**：hash 路由浏览、搜索、排序、网格/列表视图、框选多选、新建/重命名（防覆盖）/复制/移动/删除（分批重试）
+- **上传**：拖拽与文件夹上传、图片/视频、TextPad 记事本、≥100MB 分块上传（失败自动重试与清理）
+- **缩略图**（图片/MP4/PDF，SHA-1 去重）、**HMAC 分享链接**（默认 24h、免账号预览/下载）、**多租户**子域隔离、CI + 80+ 测试
 
-## 技术栈
+## 部署
 
-| 层 | 技术 |
-|---|---|
-| 前端 | React 18 + TypeScript + MUI 5（Create React App） |
-| 后端 | Cloudflare Pages Functions（零服务器） |
-| 存储 | Cloudflare R2（S3 兼容，绑定为 `BUCKET`） |
-| 认证 | WebDAV Basic Auth（网页端凭据存 localStorage，401 自动弹窗登录） |
+前置条件：Cloudflare 账号（已开通 R2）并创建至少一个 bucket。
 
-## 快速开始
+**Pages 控制台（Git 集成）**：Fork 并连接 Pages → 在"变量和密钥"添加下表的环境变量（`WEBDAV_USERNAME`/`WEBDAV_PASSWORD`/`WEBDAV_SHARE_SECRET` 用**密钥**加密类型，`WEBDAV_SHARE_TTL` 用**文本**）→ 在"绑定"添加 R2 存储桶 `BUCKET` → 首次部署后在 Deployments 重试生效。
 
-### 前置条件
+## 环境变量与绑定
 
-- 已注册 [Cloudflare](https://dash.cloudflare.com/) 账号并添加付款方式
-- 已开通 R2 服务并创建至少一个 bucket
+按以下配置（Cloudflare Pages 控制台 → 设置）：
 
-### 方式一：Pages 控制台（Git 集成）
+**变量和密钥**
 
-1. Fork 本项目并连接到 Cloudflare Pages
-   - 框架预设选择 **Docusaurus**
-   - 在控制台添加环境变量：`WEBDAV_USERNAME`、`WEBDAV_PASSWORD`（建议用"加密"类型，即 secret）
-2. 首次部署后，在 Pages 绑定 R2 bucket 为 `BUCKET`
-3. 在 Deployments 页面重试部署以生效
-4. （可选）添加自定义域名
+| 类型 | 名称 | 值 |
+| --- | --- | --- |
+| 密钥 | `WEBDAV_USERNAME` | 登录用户名 |
+| 密钥 | `WEBDAV_PASSWORD` | 登录密码 |
+| 密钥 | `WEBDAV_SHARE_SECRET` | 分享签名密钥 |
+| 文本 | `WEBDAV_SHARE_TTL` | `86400` |
 
-> ⚠️ Git 集成部署下，环境变量与 R2 绑定都需在 Pages 控制台配置（机密用"加密"类型）。
+**绑定**
 
-### 方式二：Wrangler CLI
+| 类型 | 名称 | 值 |
+| --- | --- | --- |
+| R2 存储桶 | `BUCKET` | 你的 R2 桶名 |
 
-```bash
-npm install
-npm run build
-npx wrangler pages deploy build \
-  --project-name flaredrive \
-  --compatibility-date=2026-08-19
-```
+- 前三项用"密钥"（加密）类型，值在控制台加密存储；`WEBDAV_SHARE_TTL` 为普通文本，默认 `86400`（24h）
+- **不设置 `WEBDAV_PUBLIC_READ`（推荐，保持私有）**：`GET`/`HEAD`/`PROPFIND` 均需认证，网页端与 WebDAV 客户端都要登录；分享用 `WEBDAV_SHARE_SECRET` 签名链接即可，无需公开读
+- **若设 `WEBDAV_PUBLIC_READ=1`**：`GET`/`HEAD`/`PROPFIND` 免认证——**任何人无需账号即可浏览/下载文件，且 PROPFIND 会公开整个目录结构（所有文件与文件夹可被枚举）**；写入操作（PUT/DELETE/MOVE/COPY/MKCOL/POST）仍需认证
 
-项目不再内置 `wrangler.toml`：CLI 部署时项目名、兼容日期需用参数显式指定；
-R2 桶绑定与 `WEBDAV_*` 环境变量仍需在 Pages 控制台配置（或使用 `wrangler pages secret put`）。
+## WebDAV 与分享
 
-## 环境变量
+- 挂载：`https://<域名>/webdav`，凭据即 `WEBDAV_USERNAME` / `WEBDAV_PASSWORD`；⚠️ 不支持 ≥100MB 上传（大文件走网页端分块）
+- 分享：选中文件 → Share → `.../webdav/<文件>?token=<签名>`，接收方免账号预览/下载，token 过期即失效
 
-| 变量 | 类型 | 必填 | 说明 |
-| --- | --- | --- | --- |
-| `WEBDAV_USERNAME` | 🔒 机密 | ✅ | 登录用户名。**缺失时服务端返回 403，所有功能不可用** |
-| `WEBDAV_PASSWORD` | 🔒 机密 | ✅ | 登录密码 |
-| `WEBDAV_SHARE_SECRET` | 🔒 机密 | 可选 | 分享链接签名密钥（随机长字符串）。未设置时分享功能关闭 |
-| `WEBDAV_PUBLIC_READ` | 普通变量 | 可选 | 设为 `1` 开启公开读：`GET`/`HEAD`/`PROPFIND` 免认证（**注意：目录列表也会公开可枚举**） |
-| `WEBDAV_SHARE_TTL` | 普通变量 | 可选 | 分享链接有效期（秒），默认 `86400`（24 小时） |
+## Cloudflare R2 免费套餐注意
 
-> 🔒 **机密项不要提交到仓库或写进代码/CI 配置！**
-> 生产环境用 Pages 控制台"环境变量 → 加密"配置，或命令行：
-> ```bash
-> npx wrangler pages secret put WEBDAV_USERNAME
-> npx wrangler pages secret put WEBDAV_PASSWORD
-> npx wrangler pages secret put WEBDAV_SHARE_SECRET
-> ```
-> 服务端通过 `env.<名称>` 读取，与普通变量用法一致。
+每请求 **50 个子请求**：目录删除（每次 ≤40 个对象）与递归复制（每次 ≤15 个）按批执行，超出返回 `503 + Retry-After`，客户端重试直至完成（操作幂等）。R2 的 I/O（await）不计入 CPU 时间。
 
-### 推荐配置：用分享、不开公开读
-
-```bash
-# 1. 配置机密（secret）——必填前两个，第三个启用分享链接
-npx wrangler pages secret put WEBDAV_USERNAME
-npx wrangler pages secret put WEBDAV_PASSWORD
-npx wrangler pages secret put WEBDAV_SHARE_SECRET   # 用随机长字符串
-
-# 2. 不设置 WEBDAV_PUBLIC_READ —— 保持私有
-# 3. （可选）普通变量 WEBDAV_SHARE_TTL 在控制台添加（默认已是 86400）
-```
-
-- 网页端与 WebDAV 全部需要登录；
-- 分享按钮生成单个文件的签名链接，接收方无需账号即可下载/预览，到期自动失效。
-
-## 本地开发
-
-```bash
-npm install
-npm start                      # 前端开发服务器（无后端功能）
-```
-
-联调 WebDAV 后端（需要本机已装 wrangler，且可访问你的 R2 bucket）：
-
-```bash
-cp .dev.vars.example .dev.vars   # 填入本地凭据（.dev.vars 已被 gitignore）
-npm run build
-# 无 wrangler.toml：R2 绑定需显式传入（--r2 BUCKET 指向你的远程桶）
-npx wrangler pages dev build --r2 BUCKET
-```
-
-## CI
-
-推送到 `main`（或提交 PR）会自动运行：`eslint` → `tsc --noEmit` → 测试（带覆盖率）→ 生产构建。
-CI 只负责验证，**不自动部署**；部署请走 Pages 控制台 Git 集成（见"快速开始"）。
-
-## 分享链接
-
-- 网页端选中单个文件 → 工具栏 Share 按钮 → 生成 `https://<域名>/webdav/<文件>?token=<签名>`
-- 接收方打开链接：浏览器显示**预览/下载页**（文件名、大小、图片/视频内联预览、Download 按钮），API/curl 直接返回原始字节
-- token 为 HMAC 签名（`<过期时间>.<签名>`），仅对该文件有效，过期即失效；无需开启公开读
-
-## WebDAV 端点
-
-任意支持 WebDAV 的客户端（如 [Cx File Explorer](https://play.google.com/store/apps/details?id=com.cxinventor.file.explorer)、[BD File Manager](https://play.google.com/store/apps/details?id=com.liuzho.file.explorer)）可挂载：
-
-- 端点地址：`https://<your-domain.com>/webdav`
-- 用户名/密码：即 `WEBDAV_USERNAME` / `WEBDAV_PASSWORD`
-
-> ⚠️ 标准 WebDAV 协议受 Cloudflare Workers 请求体限制，**不支持 ≥100MB 上传**；
-> 大文件请通过网页端上传（支持分块）。
-
-## 免费套餐注意事项
-
-- 每请求 **50 个子请求**预算：目录删除按批执行（单次最多 40 个对象），超出返回 `503 + Retry-After`，网页端与客户端重试直至完成（删除幂等，重复调用安全）
-- 目录递归**复制**同样按批执行（单次最多 15 个子对象，每个最多 3 个子请求），超出返回 `503 + Retry-After`；重试时已复制到目标的对象会被跳过，不会重复覆盖
-- 每请求 CPU 10ms：R2 的 I/O（await）不计入 CPU，因此文件操作本身不受影响
-
-## 测试
-
-```bash
-npm test -- --watchAll=false   # 运行全部测试
-npm test -- --watchAll=false --coverage   # 带覆盖率
-```
-
-覆盖：上传队列（重试/死锁回归）、multipart 分块与清理、PROPFIND XML 转义、分享 token 签名/校验/预览页、WebDAV COPY/MOVE/DELETE 语义、认证流程、前端组件（登录弹窗、进度面板）。
-
-## 项目结构
-
-```
-├── src/                    # 前端（React + MUI）
-│   ├── app/                #   WebDAV 客户端、上传队列、认证、文件夹上传
-│   └── __tests__/          #   测试
-├── functions/webdav/       # Pages Functions —— WebDAV 服务端（9 个方法 handler + 分享）
-├── public/                 # 静态资源 / PWA
-├── .dev.vars.example       # 本地开发凭据模板（复制为 .dev.vars）
-└── .github/workflows/ci.yml # CI（lint/tsc/test/build，验证用）
-```
-
-## 致谢
-
-WebDAV 相关代码基于 [r2-webdav](https://github.com/abersheeran/r2-webdav)（作者 [abersheeran](https://github.com/abersheeran)）。
+致谢：WebDAV 代码基于 [r2-webdav](https://github.com/abersheeran/r2-webdav)
