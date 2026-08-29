@@ -115,7 +115,10 @@ export function encodeKeyPath(key: string) {
   return key.split("/").map(encodeURIComponent).join("/");
 }
 
-async function hmacSha256Hex(secret: string, message: string) {
+async function hmacSha256(
+  secret: string,
+  message: string
+): Promise<Uint8Array> {
   const key = await crypto.subtle.importKey(
     "raw",
     new TextEncoder().encode(secret),
@@ -128,9 +131,14 @@ async function hmacSha256Hex(secret: string, message: string) {
     key,
     new TextEncoder().encode(message)
   );
-  return [...new Uint8Array(signature)]
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
+  return new Uint8Array(signature);
+}
+
+// URL 安全的 base64（无 padding），用于缩短 token
+function toBase64Url(bytes: Uint8Array) {
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
 // 分享有效期边界：不允许永久，最短 1 小时，最长 30 天
@@ -160,13 +168,15 @@ export function resolveShareTtl(
   return clamp(fallback);
 }
 
-// 分享 token 格式：`<expiresUnixSeconds>.<hmacHex(secret, "path:expires")>`
+// 分享 token 格式：`<expiresUnixSeconds>.<base64url(hmac(secret, "path:expires") 前 16 字节)>`
+// 签名截取 128 位（22 字符），对分享链接的暴力猜测场景足够安全。
 export async function createShareToken(
   secret: string,
   path: string,
   expires: number
 ) {
-  return `${expires}.${await hmacSha256Hex(secret, `${path}:${expires}`)}`;
+  const signature = await hmacSha256(secret, `${path}:${expires}`);
+  return `${expires}.${toBase64Url(signature.slice(0, 16))}`;
 }
 
 export async function verifyShareToken(
@@ -178,6 +188,6 @@ export async function verifyShareToken(
   if (!expiresStr || !signature) return false;
   const expires = Number(expiresStr);
   if (!Number.isFinite(expires) || expires < Date.now() / 1000) return false;
-  const expected = await hmacSha256Hex(secret, `${path}:${expiresStr}`);
-  return timingSafeEqual(expected, signature);
+  const expected = await hmacSha256(secret, `${path}:${expiresStr}`);
+  return timingSafeEqual(toBase64Url(expected.slice(0, 16)), signature);
 }

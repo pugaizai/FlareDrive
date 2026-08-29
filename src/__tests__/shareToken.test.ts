@@ -47,3 +47,11 @@ it("rejects malformed tokens", async () => {
     verifyShareToken(SECRET, "dir/a.txt", "123.")
   ).resolves.toBe(false);
 });
+
+
+it("produces a shortened token (signature under 30 chars)", async () => {
+  const expires = Math.floor(Date.now() / 1000) + 3600;
+  const token = await createShareToken(SECRET, "dir/a.txt", expires);
+  const sig = token.split(".")[1];
+  expect(sig.length).toBeLessThan(30);
+});
