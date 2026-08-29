@@ -168,15 +168,17 @@ export function resolveShareTtl(
   return clamp(fallback);
 }
 
-// 分享 token 格式：`<expiresUnixSeconds>.<base64url(hmac(secret, "path:expires") 前 16 字节)>`
-// 签名截取 128 位（22 字符），对分享链接的暴力猜测场景足够安全。
+// 分享 token 格式：`<base36(expiresUnixSeconds)>.<base64url(hmac 前 10 字节)>`
+// 过期时间 base36 编码（约 7 字符），签名截取 80 位（14 字符），
+// 对分享链接的暴力猜测场景足够安全，token 总长约 22 字符。
 export async function createShareToken(
   secret: string,
   path: string,
   expires: number
 ) {
-  const signature = await hmacSha256(secret, `${path}:${expires}`);
-  return `${expires}.${toBase64Url(signature.slice(0, 16))}`;
+  const expiresStr = Math.floor(expires).toString(36);
+  const signature = await hmacSha256(secret, `${path}:${expiresStr}`);
+  return `${expiresStr}.${toBase64Url(signature.slice(0, 10))}`;
 }
 
 export async function verifyShareToken(
@@ -186,8 +188,8 @@ export async function verifyShareToken(
 ) {
   const [expiresStr, signature] = token.split(".");
   if (!expiresStr || !signature) return false;
-  const expires = Number(expiresStr);
+  const expires = parseInt(expiresStr, 36);
   if (!Number.isFinite(expires) || expires < Date.now() / 1000) return false;
   const expected = await hmacSha256(secret, `${path}:${expiresStr}`);
-  return timingSafeEqual(toBase64Url(expected.slice(0, 16)), signature);
+  return timingSafeEqual(toBase64Url(expected.slice(0, 10)), signature);
 }

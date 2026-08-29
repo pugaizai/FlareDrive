@@ -49,9 +49,12 @@ it("rejects malformed tokens", async () => {
 });
 
 
-it("produces a shortened token (signature under 30 chars)", async () => {
+it("produces a shortened token (signature 14 chars, total under 25)", async () => {
   const expires = Math.floor(Date.now() / 1000) + 3600;
   const token = await createShareToken(SECRET, "dir/a.txt", expires);
-  const sig = token.split(".")[1];
-  expect(sig.length).toBeLessThan(30);
+  const [exp, sig] = token.split(".");
+  expect(sig.length).toBe(14);
+  expect(token.length).toBeLessThan(25);
+  // 过期时间应为 base36 编码
+  expect(parseInt(exp, 36)).toBe(expires);
 });
