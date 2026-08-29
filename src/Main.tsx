@@ -148,14 +148,24 @@ function Main({
   const uploadEnqueue = useUploadEnqueue();
   const { t } = useI18n();
 
+  const fetchSeqRef = useRef(0);
   const fetchFiles = useCallback(() => {
+    // 序号守卫：快速切换目录时，旧目录的 PROPFIND 可能后返回；
+    // 无守卫时旧响应会覆盖新列表（且可能在别的目录里误删旧目录的文件）
+    const seq = ++fetchSeqRef.current;
     fetchPath(cwd)
       .then((files) => {
+        if (seq !== fetchSeqRef.current) return;
         setFiles(files);
         setMultiSelected(null);
       })
-      .catch(onError)
-      .finally(() => setLoading(false));
+      .catch((error) => {
+        // 被取代的请求不再报错，避免错误提示闪现
+        if (seq === fetchSeqRef.current) onError(error);
+      })
+      .finally(() => {
+        if (seq === fetchSeqRef.current) setLoading(false);
+      });
   }, [cwd, onError]);
 
   // ---- cwd ↔ location.hash 同步：刷新不丢路径，支持前进/后退 ----
@@ -189,7 +199,9 @@ function Main({
     } catch {
       current = "";
     }
-    if (current !== cwd) window.location.hash = cwd;
+    if (current !== cwd) window.location.hash = encodeKey(cwd);
+    // 按 path 段编码写入（encodeKey），读取侧 decodeURIComponent 才能无损往返：
+    // 直接写入原始路径时，名字含 % 的目录（如 "100%"）会让解码抛错并弹回根目录
   }, [cwd]);
 
   useEffect(() => setLoading(true), [cwd]);
@@ -245,8 +257,9 @@ function Main({
           <CircularProgress />
         </Centered>
       ) : (
-        <DropZone
-          onDrop={async (event) => {
+      <DropZone
+        onDrop={async (event) => {
+          try {
             const items = Array.from(event.dataTransfer.items);
             const hasEntries = items.some((item) => item.webkitGetAsEntry);
             if (hasEntries) {
@@ -267,8 +280,12 @@ function Main({
                 }))
               );
             }
-          }}
-        >
+          } catch (error) {
+            // 目录树遍历失败等此前会无声挂起，现在提示用户
+            onError(error as Error);
+          }
+        }}
+      >
           <FileGrid
             files={filteredFiles}
             onCwdChange={(newCwd: string) => setCwd(newCwd)}
@@ -307,6 +324,7 @@ function Main({
         setOpen={setShowUploadDrawer}
         cwd={cwd}
         onUpload={fetchFiles}
+        onError={onError}
       />
 
       <TextPadDrawer
@@ -322,15 +340,21 @@ function Main({
         onDownload={async () => {
           if (multiSelected?.length !== 1) return;
           const key = multiSelected[0];
-          const res = await webdavFetch(`/webdav/${encodeKey(key)}`);
-          if (!res.ok) throw new Error(t("main.downloadFailed"));
-          const blob = await res.blob();
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement("a");
-          a.href = url;
-          a.download = key.split("/").pop()!;
-          a.click();
-          URL.revokeObjectURL(url);
+          try {
+            const res = await webdavFetch(`/webdav/${encodeKey(key)}`);
+            if (!res.ok) throw new Error(t("main.downloadFailed"));
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = key.split("/").pop()!;
+            a.click();
+            // 立即 revoke 会中断 Firefox 等浏览器的异步下载，延迟回收
+            setTimeout(() => URL.revokeObjectURL(url), 10_000);
+          } catch (error) {
+            // 此前 async 处理器的异常无人接住，下载失败时界面毫无反馈
+            onError(error as Error);
+          }
         }}
         onRename={() => {
           if (multiSelected?.length !== 1) return;

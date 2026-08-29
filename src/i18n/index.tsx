@@ -135,10 +135,16 @@ export function translateError(error: unknown, t: TFunction): string {
       case "transferFailed":
         return t("error.transferFailed", {
           action: t(
-            params?.action === "move" ? "error.actionMove" : "error.actionCopy"
+            params?.action === "move"
+              ? "error.actionMove"
+              : params?.action === "upload"
+              ? "error.actionUpload"
+              : "error.actionCopy"
           ),
           status: params?.status,
         });
+      case "networkError":
+        return t("error.networkError");
       case "deleteTimedOut":
         return t("error.deleteTimedOut", {
           attempts: params?.attempts,

@@ -91,6 +91,8 @@ export const en = {
   "error.transferFailed": "{action} failed with status {status}",
   "error.actionMove": "Move",
   "error.actionCopy": "Copy",
+  "error.actionUpload": "Upload",
+  "error.networkError": "Network error. Check your connection and try again",
   "error.deleteTimedOut": "Delete timed out after {attempts} retries: {path}",
   "error.deleteFailed": "Delete failed: {path} ({status})",
 } as const;
@@ -173,6 +175,8 @@ export const zhCN: Translation = {
   "error.transferFailed": "{action} 失败（状态码 {status}）",
   "error.actionMove": "移动",
   "error.actionCopy": "复制",
+  "error.actionUpload": "上传",
+  "error.networkError": "网络错误，请检查网络连接后重试",
   "error.deleteTimedOut": "删除超时（已重试 {attempts} 次）：{path}",
   "error.deleteFailed": "删除失败：{path}（状态码 {status}）",
 };
@@ -250,6 +254,8 @@ export const zhTW: Translation = {
   "error.transferFailed": "{action} 失敗（狀態碼 {status}）",
   "error.actionMove": "移動",
   "error.actionCopy": "複製",
+  "error.actionUpload": "上傳",
+  "error.networkError": "網路錯誤，請檢查網路連線後重試",
   "error.deleteTimedOut": "刪除逾時（已重試 {attempts} 次）：{path}",
   "error.deleteFailed": "刪除失敗：{path}（狀態碼 {status}）",
 };

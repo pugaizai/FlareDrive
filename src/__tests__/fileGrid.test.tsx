@@ -252,3 +252,29 @@ it("blocks native drag start inside the file grid", () => {
   // fireEvent 返回 false 表示默认行为已被 preventDefault 阻止
   expect(fireEvent.dragStart(container)).toBe(false);
 });
+
+it("keeps the selection when right-clicking an already selected row", () => {
+  const onMultiSelect = jest.fn();
+  render(
+    <FileGrid
+      files={[item("a.txt"), item("b.txt")]}
+      onCwdChange={jest.fn()}
+      multiSelected={["a.txt"]}
+      onMultiSelect={onMultiSelect}
+      view="list"
+      onSelectMany={jest.fn()}
+    />
+  );
+  const container = screen.getByTestId("file-grid");
+  // 右键已选中的行：保持整个选择不变（此前会把它移出批量操作范围）
+  // eslint-disable-next-line testing-library/no-node-access
+  const rowA = container.querySelector('[data-key="a.txt"]') as HTMLElement;
+  fireEvent.contextMenu(rowA);
+  expect(onMultiSelect).not.toHaveBeenCalled();
+
+  // 右键未选中的行：加入选择
+  // eslint-disable-next-line testing-library/no-node-access
+  const rowB = container.querySelector('[data-key="b.txt"]') as HTMLElement;
+  fireEvent.contextMenu(rowB);
+  expect(onMultiSelect).toHaveBeenCalledWith("b.txt");
+});

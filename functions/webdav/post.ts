@@ -1,4 +1,4 @@
-import { notFound } from "./utils";
+import { ensureDirectoryParent, notFound } from "./utils";
 import { RequestHandlerParams } from "./utils";
 
 export async function handleRequestPostCreateMultipart({
@@ -6,6 +6,13 @@ export async function handleRequestPostCreateMultipart({
   path,
   request,
 }: RequestHandlerParams) {
+  // 与 PUT 相同的父级校验：防止在无目录标记、或以文件为父的路径下
+  // 创建分片上传，完成后产生永远不可见的对象
+  if (!path.startsWith("_$flaredrive$/")) {
+    const parentError = await ensureDirectoryParent(bucket, path);
+    if (parentError) return parentError;
+  }
+
   const thumbnail = request.headers.get("fd-thumbnail");
   const customMetadata = thumbnail ? { thumbnail } : undefined;
 
@@ -28,15 +35,34 @@ export async function handleRequestPostCompleteMultipart({
   if (!uploadId) return notFound();
   const multipartUpload = bucket.resumeMultipartUpload(path, uploadId);
 
-  const completeBody: { parts: Array<any> } = await request.json();
+  let completeBody: { parts: Array<any> };
+  try {
+    completeBody = await request.json();
+  } catch {
+    return new Response("Bad Request: invalid JSON body", { status: 400 });
+  }
+  if (
+    !completeBody ||
+    !Array.isArray(completeBody.parts) ||
+    completeBody.parts.some(
+      (part) =>
+        !part ||
+        !Number.isInteger(part.partNumber) ||
+        typeof part.etag !== "string"
+    )
+  )
+    return new Response("Bad Request: invalid parts", { status: 400 });
 
   try {
     const object = await multipartUpload.complete(completeBody.parts);
     return new Response(null, {
       headers: { etag: object.httpEtag },
     });
-  } catch (error: any) {
-    return new Response(error.message, { status: 400 });
+  } catch {
+    // 不向客户端透传 R2 的内部错误消息；常见原因是 uploadId 失效或分片清单不完整
+    return new Response("Bad Request: failed to complete multipart upload", {
+      status: 400,
+    });
   }
 }
 

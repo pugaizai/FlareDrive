@@ -81,6 +81,7 @@ it("aborts the multipart upload when a part upload fails", async () => {
 
 it("does not abort on a successful multipart upload", async () => {
   FakeXHR.fail = false;
+  FakeXHR.statusCode = 200; // 非 2xx 的分片响应现在会中止上传（此前被误当成功）
   mockWebdavFetch
     .mockResolvedValueOnce({
       ok: true,
@@ -100,13 +101,19 @@ it("does not abort on a successful multipart upload", async () => {
 it("notifies the auth dialog when a part upload returns 401", async () => {
   FakeXHR.fail = false;
   FakeXHR.statusCode = 401;
-  mockWebdavFetch
-    .mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ uploadId: "u3" }),
-    })
-    .mockResolvedValueOnce({ ok: true, text: async () => "" });
+  mockWebdavFetch.mockResolvedValueOnce({
+    ok: true,
+    json: async () => ({ uploadId: "u3" }),
+  });
 
-  await multipartUpload("big.bin", makeBigFile(SIZE_LIMIT));
+  // 401 的分片响应必须中止上传（抛错并清理孤儿分块），而不是带着 etag=null
+  // 继续走 complete；notifyUnauthorized 由 xhrFetch 在 onload 中触发
+  await expect(
+    multipartUpload("big.bin", makeBigFile(SIZE_LIMIT))
+  ).rejects.toThrow();
   expect(notifyUnauthorized).toHaveBeenCalled();
+  const abortCall = mockWebdavFetch.mock.calls.find(
+    ([, init]) => (init as RequestInit)?.method === "DELETE"
+  );
+  expect(abortCall).toBeDefined();
 });

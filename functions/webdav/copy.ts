@@ -1,4 +1,4 @@
-import { notFound } from "./utils";
+import { isDirectoryMarker, notFound } from "./utils";
 import { listAll, RequestHandlerParams, WEBDAV_ENDPOINT } from "./utils";
 
 // 免费套餐限制：每请求最多 50 个子请求（R2 的 head/get/put 各算 1 个）。
@@ -8,7 +8,8 @@ import { listAll, RequestHandlerParams, WEBDAV_ENDPOINT } from "./utils";
 //     只花 1 个子请求，保证每次调用都能向前推进；否则再 get + put（+2）
 //   - 预算不足以容纳下一个操作时返回 503 + Retry-After，客户端重试继续
 // 注意：把目录复制到已存在的目标目录时，目标中同名子对象会被跳过而不是覆盖
-// （对单个文件复制不受影响）。
+// （对单个文件复制不受影响）。这与 RFC 的完全覆盖语义有偏差，但"跳过已有"
+// 是 503 断点续传能向前推进的前提，保留为文档化限制。
 const MAX_SUBREQUESTS = 50;
 const OVERHEAD_SUBREQUESTS = 3;
 
@@ -17,24 +18,39 @@ export async function handleRequestCopy({
   path,
   request,
 }: RequestHandlerParams) {
-  const dontOverwrite = request.headers.get("Overwrite") === "F";
+  const overwriteHeader = request.headers.get("Overwrite");
+  // RFC 4918 §10.6：Overwrite 只允许 T/F
+  if (overwriteHeader !== null && overwriteHeader !== "T" && overwriteHeader !== "F")
+    return new Response("Bad Request: invalid Overwrite header", { status: 400 });
+  const dontOverwrite = overwriteHeader === "F";
+
   const destinationHeader = request.headers.get("Destination");
   if (destinationHeader === null)
     return new Response("Bad Request", { status: 400 });
 
+  // 部分客户端发送相对路径或坏百分号编码的 Destination，此前未捕获直接 500
+  let destination: string;
+  try {
+    const destPathname = new URL(destinationHeader, request.url).pathname;
+    const decodedPathname = decodeURIComponent(destPathname).replace(/\/$/, "");
+    if (!decodedPathname.startsWith(WEBDAV_ENDPOINT))
+      return new Response("Bad Request", { status: 400 });
+    destination = decodedPathname.slice(WEBDAV_ENDPOINT.length);
+  } catch {
+    return new Response("Bad Request: invalid Destination header", {
+      status: 400,
+    });
+  }
+  if (destination === "")
+    return new Response("Bad Request: invalid Destination", { status: 400 });
+
   const src = await bucket.get(path);
   if (src === null) return notFound();
-
-  const destPathname = new URL(destinationHeader).pathname;
-  const decodedPathname = decodeURIComponent(destPathname).replace(/\/$/, "");
-  if (!decodedPathname.startsWith(WEBDAV_ENDPOINT))
-    return new Response("Bad Request", { status: 400 });
-  const destination = decodedPathname.slice(WEBDAV_ENDPOINT.length);
+  const isDirectory = isDirectoryMarker(src);
 
   if (
     destination === path ||
-    (src.httpMetadata?.contentType === "application/x-directory" &&
-      destination.startsWith(path + "/"))
+    (isDirectory && destination.startsWith(path + "/"))
   )
     return new Response("Bad Request", { status: 400 });
 
@@ -42,13 +58,18 @@ export async function handleRequestCopy({
   const destinationExists = await bucket.head(destination);
   if (dontOverwrite && destinationExists)
     return new Response("Precondition Failed", { status: 412 });
+  // 类型混淆：文件不能覆盖目录标记（会让子对象不可见），目录也不能覆盖文件。
+  // （Overwrite: F 的 head→put 之间存在极小的竞态窗口；R2 无事务能力，仅能尽力校验）
+  if (destinationExists && isDirectoryMarker(destinationExists) !== isDirectory)
+    return new Response(
+      "Method Not Allowed: cannot overwrite a collection with a non-collection (or vice versa)",
+      { status: 405 }
+    );
   await bucket.put(destination, src.body, {
     httpMetadata: src.httpMetadata,
     customMetadata: src.customMetadata,
   });
 
-  const isDirectory =
-    src.httpMetadata?.contentType === "application/x-directory";
   if (isDirectory) {
     const depth = request.headers.get("Depth") ?? "infinity";
     switch (depth) {

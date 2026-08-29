@@ -118,8 +118,13 @@ export async function handleRequestPropfind({
   </response>`;
   });
 
-  return new Response(responseTemplate.replace("{{items}}", items.join("")), {
-    status: 207,
-    headers: { "Content-Type": "application/xml" },
-  });
+  // 用函数形式替换：字符串形式的替换值会解释 `$'`、`` $` `` 等 `$` 序列，
+  // 文件名含 `$` 时会注入模板尾部（如提前闭合 </multistatus>），破坏整个目录的 XML
+  return new Response(
+    responseTemplate.replace("{{items}}", () => items.join("")),
+    {
+      status: 207,
+      headers: { "Content-Type": "application/xml" },
+    }
+  );
 }

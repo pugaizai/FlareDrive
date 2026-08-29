@@ -67,11 +67,13 @@ function UploadDrawer({
   setOpen,
   cwd,
   onUpload,
+  onError,
 }: {
   open: boolean;
   setOpen: (open: boolean) => void;
   cwd: string;
   onUpload: () => void;
+  onError: (error: Error) => void;
 }) {
   const { t } = useI18n();
   const uploadEnqueue = useUploadEnqueue();
@@ -82,7 +84,9 @@ function UploadDrawer({
     try {
       await createFolderAt(cwd, folderName);
     } catch (error) {
-      console.log(`Create folder failed: ${error}`);
+      // 此前只 console.log，失败时用户毫无感知
+      onError(error as Error);
+      return;
     }
     onUpload();
   };

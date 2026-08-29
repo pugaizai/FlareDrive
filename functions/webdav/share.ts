@@ -72,6 +72,10 @@ export async function handleRequestSharePage({
 
   return new Response(html, {
     status: 200,
-    headers: { "Content-Type": "text/html; charset=utf-8" },
+    headers: {
+      "Content-Type": "text/html; charset=utf-8",
+      // 内容已全部转义；nosniff 作为纵深防御，防止被当作其他类型解析
+      "X-Content-Type-Options": "nosniff",
+    },
   });
 }

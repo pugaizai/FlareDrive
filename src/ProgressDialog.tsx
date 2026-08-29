@@ -43,7 +43,8 @@ function ProgressDialog({
         <DialogContent sx={{ padding: 0 }}>
           <List>
             {tasks.map((task) => (
-              <ListItem key={task.name}>
+              // 同名文件会产生多个任务，用队列内唯一 id 作 key（task.name 会重复）
+              <ListItem key={task.id}>
                 <ListItemText
                   primary={task.name}
                   secondary={`${humanReadableSize(
@@ -51,16 +52,19 @@ function ProgressDialog({
                   )} / ${humanReadableSize(task.total)}`}
                 />
                 {task.status === "failed" ? (
-                  <Tooltip title={task.error.message}>
+                  <Tooltip title={task.error?.message ?? String(task.error)}>
                     <ErrorOutlineIcon color="error" />
                   </Tooltip>
                 ) : task.status === "completed" ? (
                   <CheckCircleOutlineIcon color="success" />
                 ) : task.status === "in-progress" ? (
+                  // 0 字节文件 total=0，除法会产生 NaN
                   <CircularProgress
                     variant="determinate"
                     size={24}
-                    value={(task.loaded / task.total) * 100}
+                    value={
+                      task.total > 0 ? (task.loaded / task.total) * 100 : 100
+                    }
                   />
                 ) : null}
               </ListItem>

@@ -8,9 +8,17 @@ export interface FolderUploadResult {
   dirs: string[];
 }
 
+// 不上传系统元数据文件
+const SYSTEM_FILE_NAMES = new Set([".ds_store", "thumbs.db", "desktop.ini"]);
+
+function isSystemFile(name: string) {
+  return name.startsWith(".") || SYSTEM_FILE_NAMES.has(name.toLowerCase());
+}
+
 /**
  * 遍历拖拽的 DataTransferItem 列表，收集文件（带 webkitRelativePath）与目录。
  * 不支持 webkitGetAsEntry 的环境退化为仅返回顶层文件。
+ * 单个条目不可读时抛错（由调用方提示用户），而不是无声挂起。
  */
 export async function collectEntries(
   items: DataTransferItem[]
@@ -26,8 +34,10 @@ export async function collectEntries(
 
   const walk = async (entry: FileSystemEntry, prefix: string) => {
     if (entry.isFile) {
-      const file = await new Promise<File>((resolve) =>
-        (entry as FileSystemFileEntry).file(resolve)
+      if (isSystemFile(entry.name)) return;
+      // 错误回调缺失时 Promise 永不落定，整个拖拽流程会无声挂起
+      const file = await new Promise<File>((resolve, reject) =>
+        (entry as FileSystemFileEntry).file(resolve, reject)
       );
       // 记录相对路径（含目录部分），供上传时定位 basedir
       Object.defineProperty(file, "webkitRelativePath", {
@@ -40,8 +50,8 @@ export async function collectEntries(
       dirs.push(dirKey);
       const reader = (entry as FileSystemDirectoryEntry).createReader();
       const readBatch = async () => {
-        const batch = await new Promise<FileSystemEntry[]>((resolve) =>
-          reader.readEntries(resolve)
+        const batch = await new Promise<FileSystemEntry[]>((resolve, reject) =>
+          reader.readEntries(resolve, reject)
         );
         if (batch.length > 0) {
           await Promise.all(batch.map((child) => walk(child, dirKey + "/")));

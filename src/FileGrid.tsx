@@ -162,7 +162,9 @@ function FileRow({
       }}
       onContextMenu={(e) => {
         e.preventDefault();
-        onMultiSelect(file.key);
+        // 资源管理器惯例：右键已选中的行保持整个选择不变
+        // （此前按 toggle 处理，会把该行悄悄移出批量操作范围）
+        if (!multiSelected?.includes(file.key)) onMultiSelect(file.key);
       }}
       sx={{ userSelect: "none" }}
     >
@@ -239,6 +241,8 @@ function FileGrid({
     scroller: HTMLElement | null;
     rafId: number | null;
     lastClientY: number;
+    /** pointerdown 时滚动容器的 scrollTop，用于把锚点修正回内容坐标 */
+    startScrollTop: number;
   } | null>(null);
   const boxRef = useRef<BoxRect | null>(null);
   const [box, setBox] = useState<BoxRect | null>(null);
@@ -292,7 +296,9 @@ function FileGrid({
       scroller: findScrollableAncestor(container),
       rafId: null,
       lastClientY: e.clientY,
+      startScrollTop: 0,
     };
+    dragStart.current.startScrollTop = dragStart.current.scroller?.scrollTop ?? 0;
     // 不能在此处 setPointerCapture：捕获会改变后续 click 事件的目标（落到容器
     // 而非被点击的行），导致普通点击打不开文件夹/文件。捕获延迟到真正进入
     // 拖拽（超过 4px 阈值）之后，见 handlePointerMove。
@@ -320,11 +326,16 @@ function FileGrid({
       }
     }
     if (!start.started) return;
+    // 锚点跟随内容滚动：边缘自动滚动时内容在静止的光标下移动，
+    // 不修正的话选框会与起始行脱节，滚过锚定边的行会被漏选
+    const scrolled =
+      (start.scroller?.scrollTop ?? 0) - start.startScrollTop;
+    const anchorY = start.y - scrolled;
     const b: BoxRect = {
       x1: Math.min(start.x, cx),
-      y1: Math.min(start.y, cy),
+      y1: Math.min(anchorY, cy),
       x2: Math.max(start.x, cx),
-      y2: Math.max(start.y, cy),
+      y2: Math.max(anchorY, cy),
     };
     boxRef.current = b;
     setBox(b);

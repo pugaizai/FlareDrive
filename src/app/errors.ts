@@ -8,7 +8,8 @@ export type ErrorCode =
   | "createFolderFailed"
   | "transferFailed"
   | "deleteTimedOut"
-  | "deleteFailed";
+  | "deleteFailed"
+  | "networkError";
 
 export interface AppError extends Error {
   code?: ErrorCode;

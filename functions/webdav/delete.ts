@@ -21,9 +21,11 @@ export async function handleRequestDelete({
   }
 
   // 文件：删掉标记即完成；目录标记若已不存在（上次未删完）也继续清理子对象。
+  let existed = false;
   if (path !== "") {
     const obj = await bucket.head(path);
     if (obj !== null) {
+      existed = true;
       await bucket.delete(path);
       if (obj.httpMetadata?.contentType !== "application/x-directory")
         return new Response(null, { status: 204 });
@@ -50,13 +52,20 @@ export async function handleRequestDelete({
     batch.push(limit(() => bucket.delete(child.key).then(() => undefined)));
     deleted++;
   }
-  await Promise.all(batch);
+  existed = existed || deleted > 0;
+  // 个别删除失败不直接 500：按 503 + Retry-After 语义让客户端重试（幂等）
+  let failed = false;
+  await Promise.all(batch).catch(() => {
+    failed = true;
+  });
 
-  if (hasMore) {
+  if (hasMore || failed) {
     return new Response(
       "Directory still contains children; retry the DELETE to continue",
       { status: 503, headers: { "Retry-After": "5" } }
     );
   }
+  // RFC 4918：删除不存在的资源返回 404（客户端按幂等语义处理）
+  if (!existed) return new Response("Not found", { status: 404 });
   return new Response(null, { status: 204 });
 }

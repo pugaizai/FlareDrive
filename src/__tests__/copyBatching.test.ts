@@ -20,6 +20,9 @@ function makeStatefulBucket(children: string[]) {
   return {
     head: jest.fn(async (key: string) => {
       if (key === "dir") return dirObject;
+      // 复制目录产生的目标标记是目录类型（真实实现如此，类型混淆检查依赖它）
+      if (key === "dst" && copied.has(key))
+        return { key, httpMetadata: { contentType: "application/x-directory" } };
       if (copied.has(key))
         return { key, httpMetadata: { contentType: "text/plain" } };
       return null;

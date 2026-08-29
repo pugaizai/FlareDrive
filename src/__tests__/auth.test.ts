@@ -15,7 +15,15 @@ const onRequestUntyped = onRequest as (context: any) => Promise<Response>;
 
 function makeBucket() {
   return {
-    head: jest.fn(async () => null),
+    // get.ts 现在先 head 取元数据（size/etag/类型），head 必须返回文件对象
+    head: jest.fn(async () => ({
+      key: "a.txt",
+      size: 4,
+      httpEtag: '"etag-a"',
+      uploaded: new Date(),
+      httpMetadata: { contentType: "text/plain" },
+      writeHttpMetadata: () => {},
+    })),
     get: jest.fn(async () => ({ body: "data", writeHttpMetadata: () => {} })),
     list: jest.fn(async () => ({ objects: [], truncated: false })),
   };

@@ -13,6 +13,8 @@ const onRequestUntyped = onRequest as (context: any) => Promise<Response>;
 const fileObject = {
   key: "a.txt",
   size: 123,
+  httpEtag: '"etag-a"',
+  uploaded: new Date(),
   httpMetadata: { contentType: "text/plain" },
 };
 

@@ -3,6 +3,7 @@ import {
   encodeKeyPath,
   notFound,
   parseBucketPath,
+  timingSafeEqual,
   verifyShareToken,
 } from "./utils";
 import { handleRequestCopy } from "./copy";
@@ -27,7 +28,11 @@ async function handleRequestOptions() {
 }
 
 async function handleMethodNotAllowed() {
-  return new Response(null, { status: 405 });
+  // RFC 7231 §6.4.5：405 必须携带 Allow 头
+  return new Response(null, {
+    status: 405,
+    headers: { Allow: Object.keys(HANDLERS).join(", ") },
+  });
 }
 
 // UTF-8 安全的 Base64（Workers 的 btoa 只支持 Latin-1）
@@ -108,7 +113,8 @@ export const onRequest: PagesFunction<{
     const expectedAuth = `Basic ${toBase64(
       `${env.WEBDAV_USERNAME}:${env.WEBDAV_PASSWORD}`
     )}`;
-    if (auth !== expectedAuth)
+    // 常数时间比较，避免逐字节短路造成的时序侧信道
+    if (!timingSafeEqual(auth, expectedAuth))
       return new Response("Unauthorized", {
         status: 401,
         headers: challengeHeaders,
@@ -122,7 +128,10 @@ export const onRequest: PagesFunction<{
         "Share links are not enabled: set WEBDAV_SHARE_SECRET",
         { status: 503 }
       );
-    const ttl = Number(env.WEBDAV_SHARE_TTL ?? 86400) || 86400; // 秒，默认 24h
+    // 秒，默认 24h；配置非法（非数字/负数/0）时回退默认
+    const ttlConfig = Number(env.WEBDAV_SHARE_TTL ?? 86400);
+    const ttl =
+      Number.isFinite(ttlConfig) && ttlConfig > 0 ? ttlConfig : 86400;
     const expires = Math.floor(Date.now() / 1000) + ttl;
     const token = await createShareToken(shareSecret, path, expires);
     const origin = new URL(request.url).origin;
@@ -141,6 +150,13 @@ export const onRequest: PagesFunction<{
   }
 
   const method: string = (context.request as Request).method;
+  // 空路径（/webdav/）只对 PROPFIND（列根目录）与 DELETE（递归清空）有意义；
+  // 其余方法此前会把空 key 传给 R2 导致未捕获异常（500）
+  if (
+    path === "" &&
+    !["PROPFIND", "DELETE"].includes(method)
+  )
+    return new Response("Bad Request: resource path required", { status: 400 });
   const handler = HANDLERS[method] ?? handleMethodNotAllowed;
   return handler({ bucket, path, request: context.request });
 };
