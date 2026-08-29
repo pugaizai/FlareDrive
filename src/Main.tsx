@@ -140,7 +140,7 @@ function Main({
   const [showTextPadDrawer, setShowTextPadDrawer] = useState(false);
   const [lastUploadKey, setLastUploadKey] = useState<string | null>(null);
   const [renameKey, setRenameKey] = useState<string | null>(null);
-  const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [sharePath, setSharePath] = useState<string | null>(null);
   // 待确认删除的 key 列表（null = 对话框关闭）；确认后执行 deletePaths
   const [confirmDelete, setConfirmDelete] = useState<string[] | null>(null);
 
@@ -365,26 +365,10 @@ function Main({
           // 打开应用内确认对话框（替代浏览器原生 window.confirm）
           setConfirmDelete(multiSelected);
         }}
-        onShare={async () => {
+        onShare={() => {
+          // 打开分享对话框，由用户选好有效期后再生成签名分享链接
           if (multiSelected?.length !== 1) return;
-          try {
-            // 由服务端生成短时效签名分享链接（需配置 WEBDAV_SHARE_SECRET）
-            const res = await webdavFetch(
-              `/webdav/${encodeKey(multiSelected[0])}?share`
-            );
-            if (res.status === 503) {
-              onError(
-                new Error(t("main.shareNotEnabled"))
-              );
-              return;
-            }
-            if (!res.ok)
-              throw new Error(t("main.shareUnavailable", { status: res.status }));
-            const { url } = (await res.json()) as { url: string };
-            setShareUrl(url);
-          } catch (error) {
-            onError(error as Error);
-          }
+          setSharePath(multiSelected[0]);
         }}
       />
 
@@ -414,9 +398,21 @@ function Main({
       />
 
       <ShareDialog
-        open={shareUrl !== null}
-        url={shareUrl ?? ""}
-        onClose={() => setShareUrl(null)}
+        open={sharePath !== null}
+        onClose={() => setSharePath(null)}
+        onCreate={async (ttlSeconds: number) => {
+          if (sharePath === null) return "";
+          // 由服务端生成签名分享链接（需配置 WEBDAV_SHARE_SECRET），有效期可选
+          const res = await webdavFetch(
+            `/webdav/${encodeKey(sharePath)}?share&ttl=${ttlSeconds}`
+          );
+          if (res.status === 503) throw new Error(t("main.shareNotEnabled"));
+          if (!res.ok)
+            throw new Error(t("main.shareUnavailable", { status: res.status }));
+          const { url } = (await res.json()) as { url: string };
+          return url;
+        }}
+        onError={onError}
       />
 
       <ConfirmDialog

@@ -30,7 +30,7 @@ Configure as follows (Cloudflare Pages dashboard → Settings):
 | Secret | `WEBDAV_USERNAME` | Login username |
 | Secret | `WEBDAV_PASSWORD` | Login password |
 | Secret | `WEBDAV_SHARE_SECRET` | Share signing secret |
-| Text | `WEBDAV_SHARE_TTL` | `86400` |
+| Text | `WEBDAV_SHARE_TTL` | `86400` (optional) |
 
 **Bindings**
 
@@ -38,7 +38,7 @@ Configure as follows (Cloudflare Pages dashboard → Settings):
 | --- | --- | --- |
 | R2 bucket | `BUCKET` | Your R2 bucket name |
 
-- The first three use the "secret" (encrypted) type and are stored encrypted in the dashboard; `WEBDAV_SHARE_TTL` is plain text, default `86400` (24h)
+- The first three use the "secret" (encrypted) type and are stored encrypted in the dashboard; `WEBDAV_SHARE_TTL` is plain text and optional — the default share validity in seconds, clamped to 1h–30d (share links can never be permanent; the web UI lets you pick 1h–30d per share)
 - **Leave `WEBDAV_PUBLIC_READ` unset (recommended — keep it private)**: `GET` / `HEAD` / `PROPFIND` all require authentication, so both the web UI and WebDAV clients must log in; use `WEBDAV_SHARE_SECRET` signed links for sharing instead — no public read needed
 - **If `WEBDAV_PUBLIC_READ=1`**: `GET` / `HEAD` / `PROPFIND` skip authentication — **anyone can browse/download files without an account, and PROPFIND exposes the whole directory structure (all files and folders can be enumerated)**; write operations (PUT/DELETE/MOVE/COPY/MKCOL/POST) still require authentication
 

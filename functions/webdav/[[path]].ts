@@ -3,6 +3,7 @@ import {
   encodeKeyPath,
   notFound,
   parseBucketPath,
+  resolveShareTtl,
   timingSafeEqual,
   verifyShareToken,
 } from "./utils";
@@ -63,6 +64,7 @@ export const onRequest: PagesFunction<{
   WEBDAV_PASSWORD: string;
   WEBDAV_PUBLIC_READ?: string;
   WEBDAV_SHARE_SECRET?: string;
+  // 分享链接默认有效期（秒），钳制在 1 小时 ~ 30 天；分享时可通过 ?ttl= 自选
   WEBDAV_SHARE_TTL?: string;
 }> = async function (context) {
   const env = context.env;
@@ -128,10 +130,13 @@ export const onRequest: PagesFunction<{
         "Share links are not enabled: set WEBDAV_SHARE_SECRET",
         { status: 503 }
       );
-    // 秒，默认 24h；配置非法（非数字/负数/0）时回退默认
-    const ttlConfig = Number(env.WEBDAV_SHARE_TTL ?? 86400);
-    const ttl =
-      Number.isFinite(ttlConfig) && ttlConfig > 0 ? ttlConfig : 86400;
+    // 有效期可选 ?ttl=<秒>（钳制 1 小时 ~ 30 天）；缺省用 WEBDAV_SHARE_TTL 默认值
+    const ttl = resolveShareTtl(env.WEBDAV_SHARE_TTL, searchParams.get("ttl"));
+    if (ttl === null)
+      return new Response(
+        "Invalid ttl: positive number of seconds between 3600 and 2592000",
+        { status: 400 }
+      );
     const expires = Math.floor(Date.now() / 1000) + ttl;
     const token = await createShareToken(shareSecret, path, expires);
     const origin = new URL(request.url).origin;

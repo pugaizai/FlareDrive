@@ -133,6 +133,33 @@ async function hmacSha256Hex(secret: string, message: string) {
     .join("");
 }
 
+// 分享有效期边界：不允许永久，最短 1 小时，最长 30 天
+export const SHARE_TTL_MIN = 3600; // 1 小时
+export const SHARE_TTL_MAX = 2592000; // 30 天
+export const SHARE_TTL_DEFAULT = 86400; // 24 小时
+
+// 解析分享有效期（秒）：优先显式 ttl 查询参数，否则回退环境变量默认值。
+// 显式参数非法时返回 null（调用方应回 400）；显式参数与环境变量越界时
+// 一律钳制到 [SHARE_TTL_MIN, SHARE_TTL_MAX]，保证永不出现永久链接。
+export function resolveShareTtl(
+  envValue: string | undefined,
+  ttlParam: string | null
+): number | null {
+  const clamp = (value: number) =>
+    Math.min(Math.max(Math.floor(value), SHARE_TTL_MIN), SHARE_TTL_MAX);
+  if (ttlParam !== null) {
+    const requested = Number(ttlParam);
+    if (!Number.isFinite(requested) || requested <= 0) return null;
+    return clamp(requested);
+  }
+  const configured = Number(envValue ?? SHARE_TTL_DEFAULT);
+  const fallback =
+    Number.isFinite(configured) && configured > 0
+      ? configured
+      : SHARE_TTL_DEFAULT;
+  return clamp(fallback);
+}
+
 // 分享 token 格式：`<expiresUnixSeconds>.<hmacHex(secret, "path:expires")>`
 export async function createShareToken(
   secret: string,

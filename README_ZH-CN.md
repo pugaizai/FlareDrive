@@ -31,7 +31,7 @@
 | 密钥 | `WEBDAV_USERNAME` | 登录用户名 |
 | 密钥 | `WEBDAV_PASSWORD` | 登录密码 |
 | 密钥 | `WEBDAV_SHARE_SECRET` | 分享签名密钥 |
-| 文本 | `WEBDAV_SHARE_TTL` | `86400` |
+| 文本 | `WEBDAV_SHARE_TTL` | `86400`（可选） |
 
 **绑定**
 
@@ -39,7 +39,7 @@
 | --- | --- | --- |
 | R2 存储桶 | `BUCKET` | 你的 R2 桶名 |
 
-- 前三项用"密钥"（加密）类型，值在控制台加密存储；`WEBDAV_SHARE_TTL` 为普通文本，默认 `86400`（24h）
+- 前三项用"密钥"（加密）类型，值在控制台加密存储；`WEBDAV_SHARE_TTL` 为普通文本、可省略——分享链接的默认有效期（秒），强制钳制在 1 小时 ~ 30 天之间（链接永不永久；网页端分享时可自选 1 小时 ~ 30 天档位）
 - **不设置 `WEBDAV_PUBLIC_READ`（推荐，保持私有）**：`GET`/`HEAD`/`PROPFIND` 均需认证，网页端与 WebDAV 客户端都要登录；分享用 `WEBDAV_SHARE_SECRET` 签名链接即可，无需公开读
 - **若设 `WEBDAV_PUBLIC_READ=1`**：`GET`/`HEAD`/`PROPFIND` 免认证——**任何人无需账号即可浏览/下载文件，且 PROPFIND 会公开整个目录结构（所有文件与文件夹可被枚举）**；写入操作（PUT/DELETE/MOVE/COPY/MKCOL/POST）仍需认证
 
