@@ -31,6 +31,11 @@ const request = (
     url,
     headers: { get: (name: string) => headers[name] ?? null },
     body,
+    // 模拟真实 Request 的读取：按字节读出 body（mkcol 据此区分空 body 与无 body）
+    arrayBuffer: async () =>
+      typeof body === "string"
+        ? (new TextEncoder().encode(body).buffer as ArrayBuffer)
+        : new ArrayBuffer(0),
   } as unknown as Request);
 
 it("PUT onto an existing directory marker returns 405 (children stay visible)", async () => {
@@ -88,7 +93,7 @@ it("MKCOL under a file parent returns 409", async () => {
   expect(bucket.put).not.toHaveBeenCalled();
 });
 
-it("MKCOL with a request body returns 415", async () => {
+it("MKCOL with a non-empty request body returns 415", async () => {
   const bucket = {
     head: jest.fn(async () => null),
     put: jest.fn(),
@@ -101,6 +106,30 @@ it("MKCOL with a request body returns 415", async () => {
 
   expect(res.status).toBe(415);
   expect(bucket.put).not.toHaveBeenCalled();
+});
+
+it("MKCOL with an empty body (Content-Length: 0, e.g. Dart webdav_client) creates the directory", async () => {
+  const bucket = {
+    head: jest.fn(async () => null),
+    put: jest.fn(),
+  };
+  const res = await handleRequestMkcol({
+    bucket,
+    path: "simple_live_app",
+    request: request("https://example.com/webdav/simple_live_app", {
+      "Content-Type": "application/xml",
+      "Content-Length": "0",
+    }),
+  } as any);
+
+  expect(res.status).toBe(201);
+  expect(bucket.put).toHaveBeenCalledWith(
+    "simple_live_app",
+    "",
+    expect.objectContaining({
+      httpMetadata: { contentType: "application/x-directory" },
+    })
+  );
 });
 
 it("COPY of a file onto a directory marker returns 405", async () => {

@@ -5,8 +5,11 @@ export async function handleRequestMkcol({
   path,
   request,
 }: RequestHandlerParams) {
-  // RFC 4918 §9.3.1：MKCOL 请求体一律 415（部分客户端会附带 XML body）
-  if (request.body)
+  // RFC 4918 §9.3.1：MKCOL 携带非空请求体一律 415（部分客户端会附带 XML body）
+  // 不能只判 request.body 是否为 null：无数据的 MKCOL 也常带 Content-Length: 0
+  // （Dart HttpClient 等），Workers 对此返回非 null 的空流，须按实际字节判断
+  const body = await request.arrayBuffer();
+  if (body.byteLength > 0)
     return new Response("Unsupported Media Type", { status: 415 });
 
   // Check if the resource already exists
